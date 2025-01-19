@@ -6,9 +6,9 @@ This repository contains the implementation and research findings of a **Reinfor
 
 
 
-MSc Thesis with Faculty of EEMCS, Delft University of Technology.
+**MSc Thesis** with Faculty of EEMCS, Delft University of Technology.
 
-Author: Víctor Andrés Rodríguez de Trío. 
+**Author:** Víctor Andrés Rodríguez de Trío. 
 
 ### Key Components
 
