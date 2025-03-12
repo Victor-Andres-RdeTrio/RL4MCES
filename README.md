@@ -90,14 +90,6 @@ This section summarises the **key contributions** and **findings** of the thesis
   - EV State of Charge (SoC) demand satisfaction
   - Energy storage utilization patterns
 
-## Repository Structure
-
-[*Note: Add your repository structure here*]
-
-## Getting Started
-
-[*Note: Add installation and usage instructions here*]
-
 ## Citation
 
 If you use this work in your research, please cite:
@@ -111,6 +103,7 @@ If you use this work in your research, please cite:
   type         = {Master thesis},
   url          = {http://resolver.tudelft.nl/uuid:7a31e167-150f-4581-998d-1fbe913e5cc9}
 }
+```
 
 ## License
 
