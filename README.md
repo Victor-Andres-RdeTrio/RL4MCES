@@ -4,11 +4,13 @@
 
 This repository contains the implementation and research findings of a **Reinforcement Learning (RL)-based Energy Management System (EMS)** for multi-carrier residential buildings. The project was conducted at **TU Delft's Green Village**, focusing on integrating and optimizing multiple energy carriers including electricity, heat, and mobility.
 
+**MSc Thesis** with Faculty of EEMCS, Delft University of Technology. 
 
-
-**MSc Thesis** with Faculty of EEMCS, Delft University of Technology.
+Thesis on TU Delft Repository: [**Reinforcement Learning for Multicarrier Energy Management: *A Computationally Efficient Solution for TU Delft's Green Village***](https://resolver.tudelft.nl/uuid:7a31e167-150f-4581-998d-1fbe913e5cc9) 
 
 **Author:** Víctor Andrés Rodríguez de Trío. 
+
+Published: 10th of February, 2025
 
 ### Key Components
 
@@ -60,7 +62,7 @@ This section summarises the **key contributions** and **findings** of the thesis
 - Achieved **96% cost efficiency** in grid exchange costs compared to the MPC (Expert) benchmark
 - Demonstrated **improved safety constraint adherence**, with negligible operational projections across critical components
 - Achieved **superior performance** in maintaining Thermal Energy Storage System (TESS) State of Charge (SoC) bounds
-- Maintained **consistent performance** throughout the test set
+- Maintained **consistent performance** throughout the test set, even with the inherently stochastic process of decision making by the Actor. 
 - Satisfied EV charging demands while ensuring operational safety
 
 ### Computational & Implementation Benefits
@@ -100,7 +102,15 @@ This section summarises the **key contributions** and **findings** of the thesis
 
 If you use this work in your research, please cite:
 
-[*Note: Add citation information here*]
+```bibtex
+@mastersthesis{RodriguezdeTrio2025,
+  author       = {V. Andrés Rodríguez de Trío},
+  title        = {Reinforcement Learning for Multicarrier Energy Management: A Computationally Efficient Solution for TU Delft's Green Village},
+  school       = {Delft University of Technology},
+  year         = {2025},
+  type         = {Master thesis},
+  url          = {http://resolver.tudelft.nl/uuid:7a31e167-150f-4581-998d-1fbe913e5cc9}
+}
 
 ## License
 
@@ -108,7 +118,7 @@ This repository is licensed under the MIT License. If you use this code or resea
 
 ## Contact
 
-- MSc Thesis author: Victor Andrés -> vandres.trio@proton.me
+- MSc Thesis author: Victor Andrés. vandres.trio@proton.me
 
 ## Master Thesis Abstract
 

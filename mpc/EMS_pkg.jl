@@ -1,9 +1,11 @@
+using EMSmodule  # This is the Module created by Dario Slaifstein, contains the MPC Expert
+
+
 using ColorSchemes
 using CSV
 using DataFrames
 using Dates
 using Distributions
-using EMSmodule
 using GaussianMixtures
 using InfiniteOpt
 using InfiniteOpt: ∂

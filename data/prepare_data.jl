@@ -8,6 +8,28 @@ using Interpolations
 using Random
 using Plots
 
+
+"""
+    test_and_train(arr)
+
+Splits an input array into test and train sets so that every 4th day goes into the test set.
+
+# Arguments
+- `arr::Vector{Float64}`: Input data array with exactly 35040 elements (representing 365 days with 96 measurements per day).
+
+# Returns
+- `test::Vector{Float64}`: Test dataset containing every 4th day of data.
+- `train::Vector{Float64}`: Training dataset containing the remaining days.
+
+# Details
+1. Reshapes the input array to a 96×365 matrix (96 measurements per day for 365 days).
+2. Assigns each day to either the test or train set based on its index (every 4th day goes to test).
+3. Prints the number of elements in each resulting dataset.
+4. Returns both datasets as separate vectors.
+
+# Throws
+- `AssertionError`: If the input array length is not exactly 35040.
+"""
 function test_and_train(arr)
     train = Float64[]; test = Float64[];
     @assert length(arr) == 35040 "Input length for test_and_train is not 35040"
@@ -25,6 +47,30 @@ function test_and_train(arr)
     test, train
 end
 
+
+"""
+    expand_train(arr, rng = Xoshiro(42))
+
+Expands a training dataset by adding a noisy version of the 3 day average as an extra 4th day.
+
+# Arguments
+- `arr::Vector{Float64}`: Input training data to be expanded.
+- `rng::AbstractRNG = Xoshiro(42)`: Random number generator for reproducibility.
+
+# Returns
+- `Vector{Float64}`: The expanded dataset with both original data and noisy variants, clamped to the original data range.
+
+# Details
+1. Processes the input data in chunks of 96×3 (3 days worth of data).
+2. For each complete 3-day sequence:
+   - Calculates the mean across days for each measurement position.
+   - Generates Gaussian noise scaled to 1/6 of the mean values.
+   - Adds both the original sequence and a noisy version of the mean to the expanded dataset.
+3. Clamps all values to stay within the original data's range.
+
+# Throws
+- `ErrorException`: If the expanded dataset exceeds 35040 elements.
+"""
 function expand_train(arr, rng = Xoshiro(42))
     ex = Float64[] 
     for i in Iterators.partition(arr,96*3)
@@ -45,7 +91,28 @@ function expand_train(arr, rng = Xoshiro(42))
     end
     clamp.(ex, minimum(arr), maximum(arr))
 end
-   
+
+"""
+    test_train_expand(arr; first = false, rng = Xoshiro(42))
+
+Prepares train and test datasets by splitting into test/train sets, and expanding the training data. Combines functions: `test_and_train` & `expand_train`.
+
+# Arguments
+- `arr::Vector{Float64}`: Input data array.
+- `first::Bool = false`: If true, removes elements from the beginning of the array; otherwise, removes from the end.
+- `rng::AbstractRNG = Xoshiro(42)`: Random number generator for reproducibility.
+
+# Returns
+- `test::Vector{Float64}`: Test dataset.
+- `train::Vector{Float64}`: Training dataset.
+- `expanded::Vector{Float64}`: Expanded training dataset with additional noise-modified samples.
+
+# Details
+1. Trims the input array to exactly 35040 elements by removing elements from either the beginning or end.
+2. Splits the data into test and train sets using `test_and_train()`.
+3. Expands the training set using `expand_train()`.
+4. Returns all three datasets.
+"""
 function test_train_expand(arr; first = false, rng = Xoshiro(42))
     while length(arr) > 35040 
         if first
@@ -58,6 +125,33 @@ function test_train_expand(arr; first = false, rng = Xoshiro(42))
     test, train, expand_train(train, rng)
 end
 
+
+"""
+    cv_train(arr, rng = Xoshiro(42); divergence = 1/3)
+
+Creates a cross-validation dataset by generating noise-modified means of 3-day sequences.
+
+# Arguments
+- `arr::Vector{Float64}`: Input training data.
+- `rng::AbstractRNG = Xoshiro(42)`: Random number generator for reproducibility.
+- `divergence::Float64 = 1/3`: Scaling factor for noise generation, controlling how much the generated data diverges from the original.
+
+# Returns
+- `Vector{Float32}`: Cross-validation dataset of 32-bit floats containing noise-modified means, clamped to the original data range.
+
+# Details
+1. Processes the input data in chunks of 96×3 (3 days worth of data).
+2. For each complete 3-day sequence:
+   - Calculates the mean across days for each measurement position.
+   - Generates Gaussian noise scaled by the mean values and the divergence parameter.
+   - Adds the noise-modified mean to the cross-validation dataset.
+3. Prints the number of elements in the resulting dataset.
+4. Clamps all values to stay within the original data's range.
+5. Returns the result as 32-bit floats.
+
+# Notes
+- The function stops processing when it encounters a chunk with fewer than 3 days of data.
+"""
 function cv_train(arr, rng = Xoshiro(42); divergence = 1/3)
     cv = Float32[] 
     for i in Iterators.partition(arr, 96*3)
@@ -72,6 +166,32 @@ function cv_train(arr, rng = Xoshiro(42); divergence = 1/3)
     clamp.(cv, minimum(arr), maximum(arr))
 end
 
+
+"""
+    my_rejCriteriaEnergy(μDrive, σDrive, tDep, tArr, Tconn, Ns, Np, vmax, Q0, chgPmax; rng::AbstractRNG = Xoshiro(42))
+
+Generates and adjusts power demands for EV use based on energy constraints.
+Slight modification of function provided by Dario Slaifstein.
+
+# Arguments
+- `μDrive::Float64`: Mean power demand in kW
+- `σDrive::Float64`: Standard deviation of power demand in kW
+- `tDep::Vector{Float64}`: Departure times in hours
+- `tArr::Vector{Float64}`: Arrival times in hours
+- `Tconn::Vector{Float64}`: Connection durations in hours
+- `Ns::Int64`: Number of series cells in the battery
+- `Np::Int64`: Number of parallel branches in the battery
+- `vmax::Float64`: Maximum cell voltage in V
+- `Q0::Float64`: Initial battery capacity in Ah
+- `chgPmax::Float64`: Maximum charging power in kW
+- `rng::AbstractRNG`: Random number generator (default: Xoshiro(42))
+
+# Returns
+- `Pdrive::Vector{Float64}`: Adjusted power demand for each charging session in kW
+
+# Details
+Generates random power demands from a truncated normal distribution, then adjusts them to ensure they don't exceed the maximum energy that can be charged based on connection time and battery capacity constraints.
+"""
 function my_rejCriteriaEnergy(μDrive, σDrive, tDep, tArr, Tconn, Ns, Np, vmax, Q0, chgPmax; rng::AbstractRNG = Xoshiro(42))
     Pdrive = rand(rng, truncated(Normal(μDrive, σDrive); lower = 0.01), length(tDep));
     Ereq = Pdrive .* (tArr .- tDep) # energy required for each session [kWh]
@@ -99,6 +219,35 @@ function my_rejCriteriaEnergy(μDrive, σDrive, tDep, tArr, Tconn, Ns, Np, vmax,
     return Pdrive
 end
 
+
+"""
+    myavailabilityEV(ns, fs = 4, rng::AbstractRNG = Xoshiro(42), μDrive::Float64 = 3.5, σDrive::Float64 = 1.5, Ns::Int64 = 100, Np::Int64 = 25, vmax::Float64 = 4.2, Q0::Float64 = 5.2, chgPmax::Float64 = 12.5)
+
+Generates EV availability schedule and power demand profiles based on statistical models.
+Slight modification of function provided by Dario Slaifstein.
+
+
+# Arguments
+- `ns::Int`: Number of samples in the time series
+- `fs::Int = 4`: Samples per hour
+- `rng::AbstractRNG = Xoshiro(42)`: Random number generator
+- `μDrive::Float64 = 3.5`: Mean power demand in kW
+- `σDrive::Float64 = 1.5`: Standard deviation of power demand in kW
+- `Ns::Int64 = 100`: Number of series cells in battery
+- `Np::Int64 = 25`: Number of parallel branches in battery
+- `vmax::Float64 = 4.2`: Maximum cell voltage in V
+- `Q0::Float64 = 5.2`: Battery capacity in Ah
+- `chgPmax::Float64 = 12.5`: Maximum charging power in kW
+
+# Returns
+- `γ::Vector{Float64}`: Availability signal (1 when EV is available for charging, 0 otherwise)
+- `tDep::Vector{Float64}`: Departure times for each day in hours
+- `tArr::Vector{Float64}`: Arrival times for each day in hours
+- `Pdrive::Vector{Float64}`: Power demand at each time step in kW
+
+# Details
+Uses Gaussian mixture models loaded from external files to generate realistic EV arrival and departure patterns. Connection durations are interpolated from historical data, and power demand is generated using the `my_rejCriteriaEnergy` function.
+"""
 function myavailabilityEV(
     ns, # number of samples
     fs = 4, # samples per hour
@@ -120,12 +269,12 @@ function myavailabilityEV(
     # using the data from Elaadusing Serialization
     # Deserialize the mixture model
     
-    open(joinpath(@__DIR__, "..", "mpc\\input\\gmmElaadFit.dat"), "r") do f
+    open(joinpath(@__DIR__, "input\\gmmElaadFit.dat"), "r") do f
         global gmm = deserialize(f) # Gaussian Mixture Model
     end
     # println("gmm", typeof(gmm), gmm)
     # load the lookup table of the connection times
-    μtCon_tarr_df = CSV.read(joinpath(@__DIR__, "..", "mpc\\input\\mean-session-length-per.csv"),
+    μtCon_tarr_df = CSV.read(joinpath(@__DIR__, "input\\mean-session-length-per.csv"),
                     DataFrame, silencewarnings = true);
     # sort following the arrival times
     sort!(μtCon_tarr_df, "Arrival Time")
@@ -210,7 +359,7 @@ end
 # Test -> 91 days (8736 steps)
 
 # Get data
-mpc_input = joinpath(@__DIR__,"..\\mpc\\input")
+mpc_input = joinpath(@__DIR__,"input") # Data used by the MPC expert
 
 # PV data:
 pvdata = JLD2.load(joinpath(mpc_input,"pv_data.jld2"), "pv_data")
@@ -259,7 +408,7 @@ clamp!(pdrive_cv, minimum(pdrive_train_ex), maximum(pdrive_train_ex));
 
 
 # Save the Data
-train_data = joinpath(@__DIR__,"..\\data\\train.jld2")
+train_data = joinpath(@__DIR__,"train.jld2")
 jldsave(train_data, 
     pv_train = pv_train,
     buy_train = buy_train, 
@@ -273,7 +422,7 @@ jldsave(train_data,
     pdrive_train = pdrive_train
 )
 
-train_ex_data = joinpath(@__DIR__,"..\\data\\train_ex.jld2")
+train_ex_data = joinpath(@__DIR__,"train_ex.jld2")
 jldsave(train_ex_data, 
     pv_train_ex = pv_train_ex,
     buy_train_ex = buy_train_ex,
@@ -288,7 +437,7 @@ jldsave(train_ex_data,
 )
 
 # Save the test data
-test_data = joinpath(@__DIR__,"..\\data\\test.jld2")
+test_data = joinpath(@__DIR__,"test.jld2")
 jldsave(test_data, 
     pv_test = pv_test,
     buy_test = buy_test,
@@ -305,9 +454,11 @@ jldsave(test_data,
 Pdrive = rhDict["PevTot[1]"] - rhDict["Pev[1]"].*rhDict["γf"]
 pdrive_mod = replace_chunk_with_max(Pdrive, 96)
 γ_mod = rhDict["γf"]
-jldsave(joinpath(@__DIR__,"..\\data\\pdrive_MPC.jld2"), pdrive_MPC = pdrive_mod, γ_MPC = γ_mod)
+jldsave(joinpath(@__DIR__,"pdrive_MPC.jld2"), pdrive_MPC = pdrive_mod, γ_MPC = γ_mod) 
+# Pdrive values are extracted directly from the MPC simulation, to have an exact comparison with RL agent. 
+# This approach was taken as the MPC simulation tended to modify very slightly the power demanded, probably new versions of the code by Darío have solved this issue.
 
-cv_data = joinpath(@__DIR__,"..\\data\\cv.jld2")
+cv_data = joinpath(@__DIR__,"cv.jld2")
 jldsave(cv_data, 
     pv_cv = pv_cv,
     buy_cv = buy_cv, 
@@ -321,7 +472,7 @@ jldsave(cv_data,
     pdrive_cv = pdrive_cv
 )
 
-cv_data_hard = joinpath(@__DIR__,"..\\data\\cv_hard.jld2")
+cv_data_hard = joinpath(@__DIR__,"cv_hard.jld2")
 jldsave(cv_data_hard, 
     pv_cv_hard = pv_cv_hard,
     buy_cv_hard = buy_cv_hard, 

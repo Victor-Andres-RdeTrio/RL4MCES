@@ -1,23 +1,51 @@
 import EMSmodule: spv!, st!, pei!, gridThermal!, costFunction!, tess!, @unpack_Generic
-# import EMSmodule: add_battPerf, ev!, 
+
+
+function concat_broken_rh(vec::Vector{Dict}) 
+    for i in length(vec):-1:1
+        if !isassigned(vec, i)
+            continue
+        else
+            return concatResultsRH(vec[1:i]; typeOpt="day-ahead");
+        end
+    end
+end
 
 """
     build_data(; nEV::Int64 = 1, season::String = "winter", profType::String = "yearly",
                loadType::String = "GV", year::Int64 = 2022, fs::Int64 = 4, cellID::String = "SYNSANYO")
 
-Build the data for the optimization problem. The output is a dictionary that contains the models for all the different devices in the Multi-carrier Energy System.
+Build standardized test data for the multi-carrier energy system optimization problem, modified to ensure identical test conditions for MPC and RL agent comparison.
+    Revise carefully to be sure of what input data you wish to provide. 
 
 # Arguments
-- `nEV::Int64`: Number of EVs in the system. Default is 1.
-- `season::String`: "summer" or "winter". Default is "winter".
-- `profType::String`: "weekly" or "daily". Default is "yearly".
-- `loadType::String`: "GV", "mffbas", or "base_models". Default is "GV".
-- `year::Int64`: Year for the profile. Default is 2022.
-- `fs::Int64`: Samples per hour. Default is 4.
-- `cellID::String`: Cell ID for the battery packs. Default is "SYNSANYO".
+- `nEV::Int64 = 1`: Number of EVs in the system. Currently limited to 1 in the environment implementation.
+- `season::String = "winter"`: [IGNORED] Season parameter is ignored as fixed test data is used.
+- `profType::String = "yearly"`: Must be "yearly" as only yearly profiles are supported in this implementation.
+- `loadType::String = "GV"`: [IGNORED] Load type parameter is ignored as fixed test data is used.
+- `year::Int64 = 2022`: [IGNORED] Year parameter is ignored as fixed test data is used.
+- `fs::Int64 = 4`: [IGNORED] Samples per hour parameter is ignored as fixed test data is used.
+- `cellID::String = "SYNSANYO"`: Cell ID for the battery packs. Default is "SYNSANYO".
 
 # Returns
-- `Dict`: Dictionary containing models for different devices in the system as well as exogenous information needed for the transition function.
+- `Dict`: Dictionary containing models for different devices in the system and the environment object:
+  - `"SPV"`: Solar PV model with predefined test data
+  - `"BESS"`: Battery Energy Storage System model
+  - `"EV"`: Electric Vehicle model(s) with driving patterns
+  - `"ST"`: solar thermal storage model
+  - `"HP"`: Heat pump model
+  - `"TESS"`: Thermal Energy Storage System model
+  - `"grid"`: Grid model with predefined load and price data
+  - `"PEI"`: Power Electronics Interface model
+  - `"Env"`: Pre-built MCES environment with fixed configuration
+  - `"Noise"`: Flag for adding noise (set to false)
+
+# Implementation Notes
+1. This function loads fixed test data from JLD2 files rather than generating it dynamically
+2. Most input arguments are retained for compatibility but ignored in the implementation
+3. Hard-coded settings ensure identical conditions for MPC and RL agent comparison
+4. Only supports single EV scenarios through the environment implementation
+5. Assertions verify that only supported profile types are used
 """
 function build_data(; nEV::Int64 = 1, 
                     season::String = "winter", 
@@ -43,7 +71,6 @@ function build_data(; nEV::Int64 = 1,
     tDep = tDep_test
     tArr = tArr_test
     Pdrive_data = Float64.(pdrive_test[1:96:end]) # Get one value per day. 
-    # Pdrive = Array_and_Pointer(array = Pdrive_data, pointer = Int32(1))
 
     # BESS model parameters
     cellID = "SYNSANYO"
@@ -135,7 +162,6 @@ function build_data(; nEV::Int64 = 1,
         "TESS" => tessModel,
         "grid" => gridModel,
         "PEI" => peiModel,
-        # "Pdrive" => Pdrive,
         "Env" => env,
         "Noise" => false
     )
@@ -550,75 +576,6 @@ function costFunction!(model, sets::modelSettings, data::Dict, noise::Bool = tru
     end 
     return model;
 end;
-
-function concat_broken_rh(vec::Vector{Dict}) 
-    for i in length(vec):-1:1
-        if !isassigned(vec, i)
-            continue
-        else
-            return concatResultsRH(vec[1:i]; typeOpt="day-ahead");
-        end
-    end
-end
-
-# function tess!(model::InfiniteModel, data::Dict) # thermal energy storage buffer
-#     # Thermal Energy Storage System
-#     t = model[:t];
-#     t0 = supports(t)[1];
-#     # Bucket model
-#     # Extract data
-#     Qtess = data["TESS"].Q; # Capacity [kWh]
-#     PtessMin = data["TESS"].PowerLim[1]; # Min power [kW]
-#     PtessMax = data["TESS"].PowerLim[2]; # Max power [kW]
-#     # Ptess0 = data["TESS"].P0; # Initial Power [p.u.]
-#     SoCtessMin = data["TESS"].SoCLim[1]; # Min State of Charge [p.u.]
-#     SoCtessMax = data["TESS"].SoCLim[2]; # Max State of Charge [p.u.]
-#     SoCtess0 = data["TESS"].SoC0; # Initial State of Charge [p.u.]
-#     ηtess = data["TESS"].η; # thermal efficiency
-       
-#     # Add variables
-#     @variables(model, begin
-#         # SoCtessMin ≤ SoCtess ≤ SoCtessMax, Infinite(t) # State of Charge
-#         SoCtess >= SoCtessMin , Infinite(t) # State of Charge
-#         Ptess, Infinite(t) # Thermal power
-#         bPtess, Infinite(t), Bin # Binary variable for TESS power
-#         0 ≤ PtessPos, Infinite(t) # Ptess^+ out power
-#         PtessNeg ≤ 0, Infinite(t) # Ptess^- in power
-#     end);
-#     # Dummy variables for bidirectional power flow, ensuring only export or import
-#     @constraints(model, begin
-#         bPtess*PtessMin ≤ PtessNeg
-#         PtessNeg + PtessPos .== Ptess
-#         # PtessNeg * (1/ηtess) + PtessPos * ηtess .== Ptess
-#         PtessPos ≤ (1-bPtess)*PtessMax
-#     end);
-    
-#     # Initial conditions
-#     @constraint(model, SoCtess(t0) .== SoCtess0)
-#     # @constraint(model, Ptess(t0).== Ptess0)
-
-#     # Bucket model
-#     @constraint(model, ∂.(SoCtess, t) .== -ηtess*Ptess/Qtess/3600);
-#     # @constraints(model, begin
-#     #     SoCtess(t0+(Tw+Δt)/2) .- SoCtess(t0) .≤ 0.05
-#     #     SoCtess(t0+(Tw+Δt)/2) + 0.05 .≤ SoCtessMax
-#     # end);
-#     return model;
-# end;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

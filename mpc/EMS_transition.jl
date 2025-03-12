@@ -1,21 +1,32 @@
-
 """
     simTransitionEnv!(results::Dict, data::Dict, s::modelSettings; typeOpt::String="day-ahead")
 
-Simulate the transition function Sₐ,ₜ₊₁ = Sₐ,ₜᴹ(Sₐ,ₜ , Pₐ,ₜ* , Wₐ,ₜ₊₁).
+Simulates the environmental transition function Sₐ,ₜ₊₁ = Sₐ,ₜᴹ(Sₐ,ₜ, Pₐ,ₜ*, Wₐ,ₜ₊₁) for the energy management system, 
+updating the state of various storage assets based on optimal control decisions and exogenous information.
+This function was modified from the code provided by the EMSModule.  
 
 # Arguments
-- `results::Dict`: A dictionary containing simulation results.
-- `data::Dict`: A dictionary containing simulation data.
-- `s::modelSettings`: Model settings.
+- `results::Dict`: Dictionary containing simulation results, including optimal control decisions.
+- `data::Dict`: Dictionary containing simulation data, including environmental data and asset information.
+- `s::modelSettings`: Model settings containing simulation parameters.
 - `typeOpt::String="day-ahead"`: Type of optimization (currently only supports "day-ahead").
 
 # Returns
-- `Tuple{Dict,Dict}`: Updated results and data dictionaries.
+- `Tuple{Dict,Dict,Any}`: Updated results dictionary, updated data dictionary, and simulation hook (resulting from performing the simulation step within the RL Environment).
+
+# Details
+1. Extracts the optimal control decisions (Pbess, Pev, Phpe) from the results dictionary.
+2. Collects exogenous information (loads, PV generation, EV driving patterns) from the data dictionary.
+3. Creates an actor and collects the exogenous information for the transition.
+4. Runs the transition in the RL environment (defined in src) to simulate system dynamics.
+5. Updates the results dictionary with new state information (SoC, voltage, current) for all storage assets.
+6. Updates the state information in the data dictionary for the next simulation step.
+7. Simulates degradation for applicable storage assets.
 
 # Throws
 - `ArgumentError`: If `typeOpt` is not "day-ahead".
 - `KeyError`: If required keys are missing from `results` or `data`.
+
 """
 function simTransitionEnv!(results::Dict, data::Dict, s::modelSettings; typeOpt::String="day-ahead")
     # This function simulates the transition function Sₐ,ₜ₊₁ = Sₐ,ₜᴹ(Sₐ,ₜ , Pₐ,ₜ* , Wₐ,ₜ₊₁).
