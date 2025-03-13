@@ -1,21 +1,101 @@
+"""
+    (p::PPO)(env::MCES_Env)
+
+Sample actions from the actor network for the current state of the environment.
+
+# Arguments
+- `p::PPO`: The PPO policy.
+- `env::MCES_Env`: The MCES environment.
+
+# Returns
+- A vector of sampled actions from Gaussian distributions defined by the actor network.
+
+# Details
+- Extracts the current state from the environment.
+- Passes the state through the actor network to get mean and standard deviation values.
+- Samples actions from the resulting Gaussian distributions using the policy's random number generator.
+- Uses a Normal distribution by default. Custom distributions can be used via "action_distribution".
+"""
 @inline function (p::PPO)(env::MCES_Env)
     res = env |> state |> p.actor 
     rand.(p.rng, Gaussian_actions(res))  # Uses a Normal(). Use "action_distribution" to use a custom distribution. 
 end
 
+
+"""
+    RLBase.optimise!(::Agent{<:PPO})
+
+Empty method for optimizing a PPO agent. Actual optimization occurs after episode completion.
+
+# Arguments
+- `::Agent{<:PPO}`: The agent with a PPO policy.
+
+# Returns
+- `nothing`
+"""
 RLBase.optimise!(::Agent{<:PPO}) = nothing
 
+
+"""
+    (ag::Agent{<:PPO})(::PostEpisodeStage, env::MCES_Env)
+
+Handles post-episode optimization for a PPO agent.
+
+# Arguments
+- `ag::Agent{<:PPO}`: The agent with a PPO policy.
+- `::PostEpisodeStage`: Dispatch tag indicating post-episode processing.
+- `env::MCES_Env`: The MCES environment.
+
+# Details
+- Marks the trajectory container as filled (ready for optimization).
+- Optimizes the policy using the collected trajectory data.
+- Empties the trajectory container for the next episode.
+"""
 function (ag::Agent{<:PPO})(::PostEpisodeStage, env::MCES_Env)
     ag.trajectory.container[] = true # to say it is filled
     optimise!(ag.policy, ag.trajectory.container)
     empty!(ag.trajectory.container)
 end
 
+"""
+    (ag::Agent{<:PPO})(::PostEpisodeStage, string::String)
+
+Handles post-episode stage for a PPO agent when running without learning.
+
+# Arguments
+- `ag::Agent{<:PPO}`: The agent with a PPO policy.
+- `::PostEpisodeStage`: Dispatch tag indicating post-episode processing.
+- `string::String`: A string parameter (likely used for identification or logging).
+
+# Details
+- Marks the trajectory container as filled.
+- Empties the trajectory container without performing optimization.
+"""
 function (ag::Agent{<:PPO})(::PostEpisodeStage, string::String) # For running without learning
     ag.trajectory.container[] = true # to say it is filled
     empty!(ag.trajectory.container)
 end
 
+
+"""
+    RLBase.optimise!(p::PPO, episode::Episode)
+
+Optimizes the PPO policy using data from a completed episode.
+
+# Arguments
+- `p::PPO`: The PPO policy to optimize.
+- `episode::Episode`: The completed episode containing states, actions, and rewards.
+
+# Details
+- Extracts states, actions, and rewards from the episode data.
+- Performs multiple optimization epochs as specified by `p.epochs`.
+- For each epoch:
+  - Computes values for all states using the critic network.
+  - Calculates Generalized Advantage Estimation (GAE) using rewards, values, and discount factors.
+  - Shuffles and batches the data according to `p.batch_size`.
+  - Calls the inner optimization function for each batch.
+- Updates the old actor model with the current actor model state for future policy ratio calculations.
+"""
 function RLBase.optimise!(p::PPO, episode::Episode)
     states, actions, rewards = map(x -> Array(episode[x][:]), (:state, :action, :reward))
 
@@ -30,6 +110,27 @@ function RLBase.optimise!(p::PPO, episode::Episode)
     Flux.loadmodel!(p.old_actor.model, Flux.state(p.actor.model))
 end
 
+
+"""
+    RLBase.optimise!(p::PPO, states, actions, advantages, values)
+
+Performs a single optimization step for both actor and critic networks.
+
+# Arguments
+- `p::PPO`: The PPO policy to optimize.
+- `states`: Batch of states.
+- `actions`: Batch of actions.
+- `advantages`: Batch of advantage values.
+- `values`: Batch of critic values for the states.
+
+# Details
+- Calculates critic targets by adding advantages to values.
+- Computes gradient for the critic network to minimize mean squared error between targets and predictions.
+- Logs critic loss if memory-safe mode is disabled.
+- Computes policy gradient for the actor network using PPO's clipped objective.
+- Applies gradient clipping if `p.max_grad_norm` is specified.
+- Updates both actor and critic networks using their respective optimizers.
+"""
 function RLBase.optimise!(p::PPO, states, actions, advantages, values)
     A = p.actor
     C = p.critic
@@ -59,7 +160,37 @@ function RLBase.optimise!(p::PPO, states, actions, advantages, values)
     optimise!(C, gs_c)
 end
 
+"""
+    policy_gradient_estimate(p::PPO, states, actions, advantage)
 
+Computes the policy gradient for the actor network using PPO's clipped objective function.
+
+# Arguments
+- `p::PPO`: The PPO policy.
+- `states`: Batch of states (first dimension is state dimension, second is batch size).
+- `actions`: Batch of actions (first dimension is action dimension, second is batch size).
+- `advantage`: Batch of advantage values (vector with length equal to batch size).
+
+# Returns
+- The computed gradients for the actor network parameters.
+
+# Details
+- Normalizes advantage values.
+- Computes log probabilities of actions under the old policy.
+- Computes log probabilities of actions under the current policy.
+- Calculates probability ratios between new and old policies.
+- Applies PPO's clipped surrogate objective:
+  - Unclipped objective: -ratio * advantage
+  - Clipped objective: -clamp(ratio, 1-clip, 1+clip) * advantage
+  - Takes the maximum (worse) of these two objectives
+- Adds entropy bonus to encourage exploration.
+- Logs various metrics if not in memory-safe mode, including:
+  - Approximate KL divergence
+  - Clipping fraction
+  - Actor and entropy losses
+  - Means and standard deviations
+- Returns the gradients for the actor network parameters.
+"""
 function policy_gradient_estimate(p::PPO, states, actions, advantage)
     # states, actions and advantage should be Float32. The second dimension of states and actions (and the only dimension of advantage) depends on the batch size.
     # example of sizes: states (11,24), actions (3,24), advantage (24,)

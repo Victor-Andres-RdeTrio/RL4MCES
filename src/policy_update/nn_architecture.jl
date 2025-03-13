@@ -1,3 +1,47 @@
+"""
+    custom_chain(
+        ns::Integer, na::Integer, rng::AbstractRNG = Xoshiro(42); 
+        width::Integer = 32, type::Integer = 1, 
+        gain::Float32 = 0.1f0, activation::Integer = 1
+    )
+
+Creates a neural network with a customizable architecture.
+
+# Arguments
+- `ns::Integer`: Number of input features.
+- `na::Integer`: Number of output features.
+- `rng::AbstractRNG`: Random number generator for weight initialization (default: `Xoshiro(42)`).
+- `width::Integer`: Base width parameter for hidden layers (default: `32`).
+- `type::Integer`: Architecture type, controlling the network structure (default: `1`).
+- `gain::Float32`: Gain value for the output layer weight initialization (default: `0.1f0`).
+- `activation::Integer`: Activation function selector (default: `1`).
+
+# Returns
+- A Flux.jl neural network model with the specified architecture.
+
+# Details
+The function supports multiple network architectures by specifying the `type` parameter:
+1. Constant width: 3-layer network with uniform hidden layer width
+2. Mid constant width: 5-layer network with adjusted width
+3. Deep constant width: 7-layer network with adjusted width
+4. Constant width + std: Parallel networks for mean and standard deviation
+5. Pyramid: Decreasing width through layers
+6. Deep pyramid: Gradually decreasing width through many layers
+7. Bottleneck: Wide-narrow-wide layer pattern
+8. Residual network: Network with skip connections
+9. Deep residual: Network with multiple skip connections
+10. Residual + bottleneck: Combines residual and bottleneck patterns
+11. 3 CW branches: Three parallel constant width networks
+12. 3 pyramid branches: Three parallel pyramid networks
+
+The width of hidden layers is automatically adjusted to maintain similar parameter counts across different architectures.
+
+Activation functions are selected via the `activation` parameter:
+1. `tanh_fast`: Fast approximation of hyperbolic tangent
+2. `mish`: Mish activation function
+
+All layers use orthogonal initialization, with the output layer using the specified `gain` parameter.
+"""
 function custom_chain(
     ns::Integer, na::Integer, rng::AbstractRNG = Xoshiro(42); 
     width::Integer = 32, type::Integer = 1, 
@@ -233,6 +277,25 @@ function custom_chain(
     return c
 end
 
+
+"""
+    count_nn_params(widths::Union{Vector{Int}, AbstractRange}, type::Integer; ns = 14)
+
+Counts the number of parameters in neural networks of various widths for a given architecture type.
+
+# Arguments
+- `widths::Union{Vector{Int}, AbstractRange}`: A collection of width values to evaluate.
+- `type::Integer`: The architecture type to use (corresponds to the `type` parameter in `custom_chain`).
+- `ns::Integer`: Number of input features (default: `14`).
+
+# Returns
+- A vector of integers representing the parameter count for each width in the input collection.
+
+# Details
+This utility function helps compare parameter counts across different network widths while keeping
+the architecture type constant. It creates a network for each width using `custom_chain`, counts
+the parameters, and returns the results.
+"""
 function count_nn_params(widths::Union{Vector{Int}, AbstractRange}, type::Integer; ns = 14)
     parameters = Int64[]
     for width in widths

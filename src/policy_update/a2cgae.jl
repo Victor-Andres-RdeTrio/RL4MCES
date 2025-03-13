@@ -1,3 +1,20 @@
+"""
+    (p::A2CGAE)(env::MCES_Env)
+
+Sample actions from the actor network for the current state of the environment.
+
+# Arguments
+- `p::A2CGAE`: The A2C-GAE policy.
+- `env::MCES_Env`: The MCES environment.
+
+# Returns
+- A vector of sampled actions from Gaussian distributions defined by the actor network.
+
+# Details
+1. Extracts the current state from the environment.
+2. Passes the state through the actor network to get mean and standard deviation values.
+3. Samples actions from the resulting Gaussian distributions using the policy's random number generator.
+"""
 @inline function (p::A2CGAE)(env::MCES_Env)
     res = env |> state |> p.actor 
     rand.(p.rng, Gaussian_actions(res))
@@ -5,17 +22,65 @@ end
 
 RLBase.optimise!(::Agent{<:A2CGAE}) = nothing
 
+"""
+    (ag::Agent{<:A2CGAE})(::PostEpisodeStage, env::MCES_Env)
+
+Handles post-episode optimization for an A2C-GAE agent.
+
+# Arguments
+- `ag::Agent{<:A2CGAE}`: The agent with an A2C-GAE policy.
+- `::PostEpisodeStage`: Dispatch tag indicating post-episode processing.
+- `env::MCES_Env`: The MCES environment.
+
+# Details
+1. Marks the trajectory container as filled (ready for optimization).
+2. Optimizes the policy using the collected trajectory data.
+3. Empties the trajectory container for the next episode.
+"""
 function (ag::Agent{<:A2CGAE})(::PostEpisodeStage, env::MCES_Env)
-    ag.trajectory.container[] = true # to indicate it is filled
+    ag.trajectory.container[] = true 
     optimise!(ag.policy, ag.trajectory.container)
     empty!(ag.trajectory.container)
 end
 
+"""
+    (ag::Agent{<:A2CGAE})(::PostEpisodeStage, string::String)
+
+Handles post-episode stage for an A2C-GAE agent when running without learning.
+
+# Arguments
+- `ag::Agent{<:A2CGAE}`: The agent with an A2C-GAE policy.
+- `::PostEpisodeStage`: Dispatch tag indicating post-episode processing.
+- `string::String`: A string parameter (likely used for identification or logging).
+
+# Details
+1. Marks the trajectory container as filled.
+2. Empties the trajectory container without performing optimization.
+"""
 function (ag::Agent{<:A2CGAE})(::PostEpisodeStage, string::String) # For running without learning
     ag.trajectory.container[] = true 
     empty!(ag.trajectory.container)
 end
 
+
+"""
+    RLBase.optimise!(p::A2CGAE, episode::Episode)
+
+Optimizes the A2C-GAE policy using data from a completed episode.
+
+# Arguments
+- `p::A2CGAE`: The A2C-GAE policy to optimize.
+- `episode::Episode`: The completed episode containing states, actions, and rewards.
+
+# Details
+1. Extracts states, actions, and rewards from the episode data.
+2. Performs multiple optimization epochs as specified by `p.epochs`.
+3. For each epoch:
+   - Computes values for all states using the critic network.
+   - Calculates Generalized Advantage Estimation (GAE) using rewards, values, and discount factors.
+   - Shuffles and batches the data according to `p.batch_size`.
+   - Calls the inner optimization function for each batch.
+"""
 function RLBase.optimise!(p::A2CGAE, episode::Episode)
     states, actions, rewards = map(x -> Array(episode[x][:]), (:state, :action, :reward))
 
@@ -29,6 +94,27 @@ function RLBase.optimise!(p::A2CGAE, episode::Episode)
     end
 end
 
+
+"""
+    RLBase.optimise!(p::A2CGAE, states, actions, advantages, values)
+
+Performs a single optimization step for both actor and critic networks.
+
+# Arguments
+- `p::A2CGAE`: The A2C-GAE policy to optimize.
+- `states`: Batch of states.
+- `actions`: Batch of actions.
+- `advantages`: Batch of advantage values.
+- `values`: Batch of critic values for the states.
+
+# Details
+1. Calculates critic targets by adding advantages to values.
+2. Computes gradient for the critic network to minimize mean squared error between targets and predictions.
+3. Logs critic loss if memory-safe mode is disabled.
+4. Computes policy gradient for the actor network.
+5. Applies gradient clipping if `p.max_grad_norm` is specified.
+6. Updates both actor and critic networks using their respective optimizers.
+"""
 function RLBase.optimise!(p::A2CGAE, states, actions, advantages, values)
     A = p.actor
     C = p.critic
@@ -58,6 +144,31 @@ function RLBase.optimise!(p::A2CGAE, states, actions, advantages, values)
     optimise!(C, gs_c)
 end
 
+
+"""
+    policy_gradient_estimate(p::A2CGAE, states, actions, advantage)
+
+Computes the policy gradient for the actor network.
+
+# Arguments
+- `p::A2CGAE`: The A2C-GAE policy.
+- `states`: Batch of states (first dimension is state dimension, second is batch size).
+- `actions`: Batch of actions (first dimension is action dimension, second is batch size).
+- `advantage`: Batch of advantage values (vector with length equal to batch size).
+
+# Returns
+- The computed gradients for the actor network parameters.
+
+# Details
+1. Normalizes advantage values.
+2. Computes actor network outputs (means and standard deviations) for the input states.
+3. Constructs Gaussian distributions and calculates log probabilities of the actions.
+4. Computes actor loss as the negative mean of log probabilities weighted by advantages.
+5. Calculates entropy loss.
+6. Combines actor and entropy losses according to their weights.
+7. Logs various metrics if not in memory-safe mode.
+8. Returns the gradients for the actor network parameters.
+"""
 function policy_gradient_estimate(p::A2CGAE, states, actions, advantage)
     # states, actions and advantage should be Float32. The second dimension of states and actions (and the only dimension of advantage) depends on the batch size.
     # example of sizes: states (11,24), actions (3,24), advantage (24,)

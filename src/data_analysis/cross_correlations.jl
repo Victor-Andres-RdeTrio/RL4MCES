@@ -1,6 +1,27 @@
 using StatsBase
 include("../mces_core.jl")
 
+
+"""
+    crosscov_unequal(short_series, long_series; corr = false)
+
+Compute the cross-covariance or cross-correlation between two time series of unequal length.
+
+# Arguments
+- `short_series`: The shorter time series.
+- `long_series`: The longer time series.
+- `corr::Bool=false`: If true, computes cross-correlation instead of cross-covariance.
+
+# Returns
+- A vector containing the cross-covariance/correlation values for each lag.
+
+# Details
+1. Verifies that the first series is indeed the shorter one.
+2. For each possible lag (0 to `length(long_series) - length(short_series)`):
+   - Extracts a segment from the longer series of the same length as the shorter series.
+   - Computes the cross-covariance or cross-correlation at lag 0 between the short series and the segment.
+   - Stores the result in the output vector.
+"""
 function crosscov_unequal(short_series, long_series; corr = false)
     n_short = length(short_series)
     n_long = length(long_series)
@@ -14,7 +35,6 @@ function crosscov_unequal(short_series, long_series; corr = false)
     for lag in 0:max_lag
         segment = long_series[lag+1 : lag+n_short]
         ccf[lag+1] = func(short_series, segment, [0], demean = true)[]
-        # ccf2[lag+1] = mean((short_series .- mean(short_series)).*(segment .-mean(segment)))
     end
     
     return ccf
@@ -71,6 +91,24 @@ function cc_all_days(short, long; corr::Bool = false, window::Int = 7, label::St
     ccv_mean
 end
 
+
+"""
+    analyze_crosscor(h_mpc::MCES_Hook, exog::Exogenous; corr::Bool = true, window::Int = 7)
+
+Analyze cross-correlations between decision variables and various system parameters/components.
+
+# Arguments
+- `h_mpc::MCES_Hook`: An MCES Hook object containing simulation data.
+- `exog::Exogenous`: An Exogenous object containing data introduced externally to the environment.
+- `corr::Bool=true`: If true, computes cross-correlation instead of cross-covariance.
+- `window::Int=7`: The window size in days for the analysis.
+
+# Returns
+- A nested dictionary where the first level keys are decision variables ('p_hp_e', 'p_bess', 'p_ev'),
+  the second level keys are system variables, and values are vectors of cross-correlation coefficients.
+
+"""
+
 function analyze_crosscor(h_mpc::MCES_Hook, exog::Exogenous; corr::Bool = true, window::Int = 7 )
     decisions = ["p_hp_e", "p_bess", "p_ev"]
     
@@ -116,6 +154,27 @@ function analyze_crosscor(h_mpc::MCES_Hook, exog::Exogenous; corr::Bool = true, 
     return results
 end
 
+
+"""
+    plot_cross_corr(results; save_path="", autocorr::Bool = false)
+
+Plot cross-correlation results for multiple decision variables and system parameters.
+
+# Arguments
+- `results`: Nested dictionary with cross-correlation results from `analyze_crosscor`.
+- `save_path::String=""`: Path to save the plot. If empty, the plot won't be saved.
+- `autocorr::Bool=false`: If true, includes autocorrelations in the plot.
+
+# Returns
+- A combined plot object with multiple subplots showing cross-correlations.
+
+# Details
+1. Groups variables into three sets to avoid overcrowded plots.
+2. Creates subplots for each decision variable and variable group combination.
+3. Uses a high-contrast color palette for distinct visualization.
+4. Displays the plots organized in a grid layout.
+5. Saves the plot to the specified path if provided.
+"""
 function plot_cross_corr(results; save_path="", autocorr::Bool = false)
     decisions = collect(keys(results))
     all_variables = sort(collect(keys(results[decisions[1]])))
@@ -155,6 +214,26 @@ function plot_cross_corr(results; save_path="", autocorr::Bool = false)
     return plot_combined
 end
 
+"""
+    plot_mean_cross_corr(results; save_path="")
+
+Plot the mean absolute cross-correlation values across all decision variables.
+
+# Arguments
+- `results`: Nested dictionary with cross-correlation results from `analyze_crosscor`.
+- `save_path::String=""`: Path to save the plot. If empty, the plot won't be saved.
+
+# Returns
+- A combined plot object with multiple subplots showing mean cross-correlations.
+
+# Details
+1. Calculates the mean of absolute cross-correlation values across all decision variables.
+2. Groups variables into three sets to avoid overcrowded plots.
+3. Creates three subplots, one for each variable group.
+4. Uses a high-contrast color palette for distinct visualization.
+5. Displays the plots organized in a vertical layout.
+6. Saves the plot to the specified path if provided.
+"""
 function plot_mean_cross_corr(results; save_path="")
     decisions = keys(results)
     all_variables = sort(collect(keys(first(values(results)))))
@@ -196,6 +275,25 @@ function plot_mean_cross_corr(results; save_path="")
     return plot_combined
 end
 
+
+"""
+    create_heatmap(results)
+
+Create a heatmap visualization of maximum absolute cross-correlation values.
+
+# Arguments
+- `results`: Nested dictionary with cross-correlation results from `analyze_crosscor`.
+
+# Returns
+- A heatmap plot showing maximum absolute cross-correlation values.
+
+# Details
+1. Extracts the maximum absolute cross-correlation value for each decision-variable pair.
+2. Filters values to ensure they don't exceed 1 (valid correlation range).
+3. Creates a heatmap with decision variables on the x-axis and system variables on the y-axis.
+4. Uses the viridis color scheme for visualization.
+
+"""
 function create_heatmap(results)
     decisions = collect(keys(results))
     variables = collect(keys(results[decisions[1]]))

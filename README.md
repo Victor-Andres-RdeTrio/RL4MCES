@@ -62,7 +62,7 @@ This section summarises the **key contributions** and **findings** of the thesis
 - Achieved **96% cost efficiency** in grid exchange costs compared to the MPC (Expert) benchmark
 - Demonstrated **improved safety constraint adherence**, with negligible operational projections across critical components
 - Achieved **superior performance** in maintaining Thermal Energy Storage System (TESS) State of Charge (SoC) bounds
-- Maintained **consistent performance** throughout the test set, even with the inherently stochastic process of decision making by the Actor. 
+- Maintained **consistent performance** throughout the test set, despite the inherent stochasticity of its decision-making. 
 - Satisfied EV charging demands while ensuring operational safety
 
 ### Computational & Implementation Benefits

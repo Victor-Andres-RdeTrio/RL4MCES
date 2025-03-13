@@ -1,4 +1,27 @@
 
+"""
+   (p::Replay)(env::MCES_Env)
+
+Action selection function for the Replay policy. Returns prerecorded actions from historical data.
+
+# Arguments
+- `p::Replay`: The replay policy containing the historical action data
+- `env::MCES_Env`: The Multi-Carrier Energy System environment (not used for action selection)
+
+# Returns
+- A 3-element vector containing the next set of actions: `[p_ev, p_bess, p_hp_e]`
+
+# Details
+1. Retrieves the action at the current index position
+2. Increments the index for the next call
+3. Returns zeros if all actions have been replayed (i.e., when index exceeds max_ind)
+4. Prints a message when there are no more actions to replay
+
+The function returns three control values representing:
+- Electric vehicle power (p_ev)
+- Battery energy storage system power (p_bess)
+- Heat pump electrical power (p_hp_e)
+"""
 @inline function (p::Replay)(env::MCES_Env)
     i = p.ind
     if i > p.max_ind 
@@ -36,25 +59,6 @@ end
 state_buffer_update!(ag::Agent{<:Replay}, env::MCES_Env) = nothing
 
 
-function fake_replay(length)
-    Replay(
-        rand(-5.0:5.0, length),
-        rand(-5.0:5.0, length),
-        rand(-5.0:5.0, length),
-        1,
-        length
-    )
-end
-
-function fake_badreplay(length)
-    Replay(
-        rand(-15.0:-5.0, length),
-        rand(-15.0:-5.0, length),
-        rand(-15.0:-5.0, length),
-        1,
-        length
-    )
-end
 
 
 @info "You can Replay"
