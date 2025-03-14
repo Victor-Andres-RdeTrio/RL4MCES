@@ -9,15 +9,12 @@ function Base.run(
     env::MCES_Env,
     W::Exogenous, 
     stop_condition=StopAfterEpisode(1),
-    hook=VoidHook(), # change to my hook
+    hook=VoidHook(), 
     reset_condition=ResetAtTerminal()
 )
-    # policy, env = check(policy, env)
     _run(policy, env, W, stop_condition, hook, reset_condition)
 end
 
-"Inject some customized checkings here by overwriting this function"
-check(policy, env) = policy, env
 
 function _run(policy::AbstractPolicy, env::MCES_Env, W::Exogenous, stop_condition, hook, reset_condition)
 
@@ -572,6 +569,41 @@ function run_dont_learn_policies(house::MCES_Env, policies::Vector;
 
     return all_hooks
 end
+
+"""
+    run_with_redirect(house, policy; exog, filename::String = "debug.txt")
+
+Execute a simulation with stdout redirected to a debug file.
+
+# Arguments
+- `house`: MCES model to simulate.
+- `policy`: Agent to apply to the MCES environment.
+- `exog`: Exogenous data for the simulation.
+- `filename::String = "debug.txt"`: Name of the debug output file.
+
+# Returns
+- Result of the `run_dont_learn` function.
+
+# Details
+- Creates a debug file.
+- Redirects standard output to this file during execution.
+- Restores the original stdout after execution completes.
+"""
+function run_with_redirect(house, policy; exog, filename::String = "debug.txt")
+    debug_file = joinpath(@__DIR__, filename)
+    original_stdout = stdout
+
+    local h
+    open(debug_file, "w") do file
+        redirect_stdout(file)
+        h = run_dont_learn(house,policy; exog = exog)
+        flush(file)
+    end
+
+    redirect_stdout(original_stdout)
+    return h
+end
+
 
 #########################################################################################
 # To run EMS Module Transition Function

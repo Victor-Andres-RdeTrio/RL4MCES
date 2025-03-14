@@ -15,11 +15,31 @@ end
 
 abstract type Normaliser end
 
+"""
+    mutable struct OnlineNorm <: Normaliser
+
+Online normalization structure that incrementally computes means and variances.
+
+# Fields
+- `means::Vector{OnlineStat}`: Vector of online mean statistics for each state dimension.
+- `var::Vector{OnlineStat}`: Vector of online variance statistics for each state dimension.
+"""
 mutable struct OnlineNorm <: Normaliser
     means::Vector{OnlineStat} 
     var::Vector{OnlineStat} 
 end
 
+"""
+    OnlineNorm(n_states::Integer)
+
+Construct an OnlineNorm with specified state dimensions.
+
+# Arguments
+- `n_states::Integer`: Number of state dimensions to track.
+
+# Returns
+- `OnlineNorm`: Initialized normalizer with zeroed mean and unitary variance statistics.
+"""
 function OnlineNorm(n_states::Integer)
     OnlineNorm(
         [Mean(Float32) for _ in 1:n_states], 
@@ -27,6 +47,19 @@ function OnlineNorm(n_states::Integer)
     )
 end
 
+"""
+    update!(norm::OnlineNorm, state_vector::Vector)
+
+Update online statistics with a new state observation.
+
+# Arguments
+- `norm::OnlineNorm`: Normalizer to update.
+- `state_vector::Vector`: New state observation vector.
+
+# Behavior
+- Updates means and variances for each dimension using online statistics.
+- Verifies dimensions match between normalizer and state vector.
+"""
 function update!(norm::OnlineNorm, state_vector::Vector)
     @assert length(norm.means) == length(state_vector) "Dimension Mismatch"
     
@@ -35,6 +68,19 @@ function update!(norm::OnlineNorm, state_vector::Vector)
     nothing
 end
 
+"""
+    z_score!(state_vector::Vector{<:AbstractFloat}, norm::OnlineNorm)
+
+Normalize a state vector in-place using z-score normalization based on tracked statistics.
+
+# Arguments
+- `state_vector::Vector{<:AbstractFloat}`: State vector to normalize in-place.
+- `norm::OnlineNorm`: Normalizer containing mean and variance statistics.
+
+# Behavior
+- Applies z-score normalization: (x - μ) / σ for each dimension.
+- Verifies dimensions match between normalizer and state vector.
+"""
 function z_score!(state_vector::Vector{<:AbstractFloat}, norm::OnlineNorm)
     @assert length(norm.means) == length(state_vector) "Dimension Mismatch"
     μ = OnlineStats.value.(norm.means)
@@ -46,6 +92,19 @@ function z_score!(state_vector::Vector{<:AbstractFloat}, norm::OnlineNorm)
     nothing
 end
 
+"""
+    reset_stats!(norm::OnlineNorm)
+
+Reset all statistical accumulators in an OnlineNorm instance.
+
+# Arguments
+- `norm::OnlineNorm`: Normalizer to reset.
+
+# Behavior
+- Sets all means to zero.
+- Sets all variances to one.
+- Resets observation counters to zero.
+"""
 function reset_stats!(norm::OnlineNorm)
     for i in eachindex(norm.means)
         norm.means[i].μ = 0f0

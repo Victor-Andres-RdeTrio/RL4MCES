@@ -143,4 +143,129 @@ function clone_critic!(bc::Clone_Policy{T}, states, rewards::Vector)  where{T<:U
     return nothing
 end
 
+######################################################################
+# Some functionality to clone the behaviour of the MPC expert
+# rhDict file is the common output of the Expert, which concatenates the states and decisions over a simulation. 
+
+function get_actions(rhDict::Dict)
+    required_fields = ["Pbess", "Pev[1]", "Phpe", "γ_cont"]
+    
+    # Error Checking
+    for field in required_fields
+        if !haskey(rhDict, field)
+            error("Missing required field: $field")
+        end
+    end
+
+    Pbess = get(rhDict, "Pbess", Float32[])
+    Pev = get(rhDict, "Pev[1]", Float32[])
+    Phpe = get(rhDict, "Phpe", Float32[])
+    γ_cont = get(rhDict, "γ_cont", Float32[])
+    
+    if !isempty(γ_cont) && !isempty(Pev) && length(γ_cont) == length(Pev)
+        processed_Pev = γ_cont .* Pev
+    else
+        processed_Pev = Float32[]
+    end
+    
+    # Create a matrix with 3 rows
+    action_matrix = zeros(Float32, 3, length(Pbess))
+    action_matrix[1, :] = processed_Pev
+    action_matrix[2, :] = Pbess
+    action_matrix[3, :] = Phpe
+    
+    return action_matrix
+end
+
+
+function get_socs(rhDict::Dict)
+    # List of required fields
+    required_fields = ["SoCtess", "SoCbess", "SoCev[1]", "γ_cont"]
+    
+    # Error Checking
+    for field in required_fields
+        if !haskey(rhDict, field)
+            error("Missing required field: $field")
+        end
+    end
+
+    # Extract the relevant fields
+    SoCtess = get(rhDict, "SoCtess", Float32[])
+    SoCbess = get(rhDict, "SoCbess", Float32[])
+    SoCev = get(rhDict, "SoCev[1]", Float32[])
+    γ_cont = get(rhDict, "γ_cont", Float32[])
+
+    # Create a matrix with 4 rows, each representing one of the state variables
+    state_matrix = zeros(Float32, 4, length(SoCtess))
+    state_matrix[1, :] = SoCtess
+    state_matrix[2, :] = SoCbess
+    state_matrix[3, :] = SoCev
+    state_matrix[4, :] = γ_cont
+    
+    return state_matrix
+end
+
+function get_exog_normalized(exog::Exogenous_BatchCollection)
+    load_e_normalized = z_score(exog.load_e, 0.342, 0.203)
+    load_th_normalized = z_score(exog.load_th, 0.655, 0.405)
+    pv_normalized = z_score(exog.pv, 0.528, 0.873)
+    λ_buy_normalized = z_score(exog.λ_buy, 0.242, 0.128)
+    λ_sell_normalized = z_score(exog.λ_sell, 0.231, 0.121)
+
+    normalized_matrix = zeros(Float32, 5, length(exog.load_e))
+    normalized_matrix[1, :] = load_e_normalized
+    normalized_matrix[2, :] = load_th_normalized
+    normalized_matrix[3, :] = pv_normalized
+    normalized_matrix[4, :] = λ_buy_normalized
+    normalized_matrix[5, :] = λ_sell_normalized
+
+    return normalized_matrix
+end
+
+function get_t_ep(ep_length::Int, episodes::Int)
+    ep = [i/ep_length for i in 1:ep_length]
+    Float32.(repeat(ep, episodes))
+end
+
+function get_t_year(length::Int)
+    ep = [i/35040 for i in 1:length]
+    Float32.(ep)
+end
+
+function get_full_state(exog::Exogenous_BatchCollection, rhDict::Dict, ep_length::Int)
+    # Extract SoCs and γ_cont
+    socs_matrix = get_socs(rhDict)
+    max_step = length(socs_matrix[1,:])   # The rhDict is the limiting factor
+
+    # Extract and normalize exogenous values
+    normalized_exog = get_exog_normalized(exog)[:, 1:max_step]
+    
+    # Calculate t_ep_ratio and t_year_ratio
+    episodes = div(max_step, ep_length)
+    t_ep_ratio = get_t_ep(ep_length, episodes)
+    # t_year_ratio = get_t_year(max_step)
+    
+    # Combine all into an 11-row matrix
+    full_state_matrix = vcat(
+        normalized_exog, 
+        socs_matrix, 
+        reshape(t_ep_ratio, 1, :)
+    )
+    
+    return full_state_matrix
+end
+
+function save_expert_data(filepath::String, actions, states, hook)
+    jldsave(filepath, actions = actions, states = states, rewards = hook) # Rewards can be found and weighted within the hook. 
+end
+
+function load_expert_data(filepath::String)
+    @load filepath actions states rewards 
+    println("Output is ordered -> actions, states, rewards")
+    actions, states, rewards
+end
+
+
+
+
 @info "Learning to Imitate"

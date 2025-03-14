@@ -10,15 +10,19 @@ Thesis on TU Delft Repository: [**Reinforcement Learning for Multicarrier Energy
 
 **Author:** Víctor Andrés Rodríguez de Trío. 
 
-Published: 10th of February, 2025
+**Published:** 10th of February, 2025
 
-### Key Components
+The code is thoroughly documented to aid anyone interested in exploring it. In addition, there are various README files to provide clear overviews of the purpose and contents of the files making up this repository.  
+
+### Key Components of the MCES Environment
 
 - 🔋 Lithium-ion battery storage
 - 🚗 Electric Vehicle (EV) integration
 - ☀️ Photovoltaic and solar thermal systems
 - 🌡️ Heat pump and thermal storage
 - 🤖 RL-based energy management system 
+
+*Note: MCES stands for Multi-carrier Energy System*
 
 ## Key Findings
 

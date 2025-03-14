@@ -1,38 +1,32 @@
 # Environment for the Multi Carrier Energy System
 
-
-""" 
-This is the environment for the Multi Carrier Energy System. 
-It recreates the high fidelity digital twin of the house studied in the project. 
-
-""" 
-
 ####################################################################################################
 # Storage Assets
 abstract type StorageAsset end
 
-
 """
     Battery <: StorageAsset
 
-A mutable struct representing a Battery storage asset. Most paramters relate to the cells that make up the battery.
+A mutable struct representing a battery storage asset in an energy management system.
 
-**Fields:**
-
-* `soc` (0-1): **State of Charge**. The remaining battery capacity as a percentage.
-* `soc_min` (0-1): **Minimum Safe SOC**. The lowest level the battery can be discharged to without risk of damage.
-* `q` (Ah): **Capacity**. The total amount of electrical charge a battery cell can store.
-* `p` (kW): **Power Output**. The current rate at which the whole battery is delivering or absorbing power.
-* `i` (A): **Current**. The current flowing through each battery cell.
-* `i_max` (A): **Maximum Current**. The highest safe current for the battery cell.
-* `v` (V): **Voltage**. The electrical potential across the battery cell terminals.
-* `v_max` (V): **Maximum Voltage**. The highest voltage the battery cell can reach.
-* `ocv` (V): **Open Circuit Voltage**. The theoretical voltage when no current flows.
-* `a` (V): **OCV Bias Parameter**. A constant used to calculate the Open Circuit Voltage.
-* `b` (V/pu): **OCV Slope Parameter**. A constant that determines how Open Circuit Voltage changes with State of Charge.
-* `η_c` (0-1): **Coulombic Efficiency (constant)**. The ratio of charge recovered during discharge compared to charge put in during charging (always between 0 and 1).
-* `Np`: **Parallel Branches (constant)**. The number of independent battery cells connected in parallel.
-* `Ns`: **Series Cells per Branch (constant)**. The number of battery cells connected in series within each parallel branch.
+# Fields
+- `soc::Float32`: State of Charge (0-1), indicating the remaining battery capacity as a percentage.
+- `soc_min::Float32`: Constant minimum safe SOC (0.2), the lowest level the battery can discharge to without damage.
+- `soc_max::Float32`: Constant maximum safe SOC (0.95), the highest level the battery should be charged to.
+- `q::Float32`: Capacity in Amp-hours (Ah) per cell, representing the total electrical charge a battery cell can store.
+- `p::Float32`: Power output in kilowatts (kW), the rate at which the whole battery is delivering or absorbing power.
+- `p_max::Float32`: Constant maximum power in kilowatts (17 kW) that can be delivered or accepted by the battery.
+- `i::Float32`: Current in Amperes (A) flowing through each battery cell.
+- `i_max::Float32`: Constant maximum safe current (7.8 A) for each battery cell.
+- `v::Float32`: Voltage in Volts (V) across the battery cell terminals.
+- `v_rated::Float32`: Constant rated voltage (3.6 V) for each battery cell.
+- `v_max::Float32`: Constant maximum voltage (4.2 V) each battery cell can reach.
+- `ocv::Float32`: Open Circuit Voltage in Volts (V), the theoretical voltage when no current flows.
+- `a::Float32`: Constant OCV bias parameter (3.525 V), used in Open Circuit Voltage calculation.
+- `b::Float32`: Constant OCV slope parameter (0.625 V/pu), determines how OCV changes with State of Charge.
+- `η_c::Float32`: Constant Coulombic efficiency (0.99).
+- `Np::Int32`: Constant number of parallel branches (10), independent battery cells connected in parallel.
+- `Ns::Int32`: Constant number of series cells per branch (100), battery cells connected in series in each parallel branch.
 """
 @kwdef mutable struct Battery <: StorageAsset
     # State of Charge and Capacity
@@ -63,18 +57,21 @@ end
 
   
 """
-    EV <: StorageAsset
+    EV{A} <: StorageAsset
 
-A mutable struct representing an electric vehicle (EV) with associated properties.
+A mutable struct representing an Electric Vehicle (EV) with battery storage capabilities in an energy management system.
 
-# Fields:
-* `bat::Battery`: Battery properties.
-* `γ::Bool`: Indicates whether the EV is in the house.
-* `soc_dep::Real`: Desired State of Charge at departure.
-* `departs::Bool`: Indicates whether the EV departs at the current timestep.
-* `in_EMS::Bool` : Indicates whether the EV is part of the Energy Management System . 
+# Type Parameters
+- `A`: The type of battery used in the EV, typically `Battery`.
 
-"""  
+# Fields
+- `bat::A`: Battery properties, defaulting to a Battery with 25 parallel branches, 100 series cells per branch, and 12.5 kW max power.
+- `γ::Bool`: Indicates whether the EV is present at the house/charging location (true) or away (false).
+- `p_drive::Float32`: Power being demanded for driving the EV in kilowatts (kW).
+- `soc_dep::Float32`: Constant desired State of Charge (0.85) at departure time.
+- `departs::Bool`: Indicates whether the EV departs at the current timestep.
+- `in_EMS::Bool`: Constant flag indicating whether the EV is part of the Energy Management System.
+"""
 @kwdef mutable struct EV{A} <: StorageAsset
     # Battery Properties
     bat :: A = Battery(Np=Int32(25), Ns=Int32(100), p_max = 12.5f0)
@@ -90,14 +87,16 @@ end
 """
     TESS
 
-A mutable struct representing a Thermal Energy Storage System (TESS) with associated properties.
+A mutable struct representing a Thermal Energy Storage System (TESS) for storing thermal energy.
 
-# Fields:
-* `soc::Real`: State of Charge (0 < soc < 1).
-* `soc_min::Real`: Minimum State of Charge.
-* `q::Real`: Capacity [KWh].
-* `η::Real`: Thermal transfer efficiency.
-
+# Fields
+- `soc::Float32`: State of Charge (0-1), indicating the current level of stored thermal energy.
+- `soc_min::Float32`: Constant minimum State of Charge (0.1) for safe operation.
+- `soc_max::Float32`: Constant maximum State of Charge (0.95) for optimal operation.
+- `p::Float32`: Power in kilowatts (kW) being delivered or received by the TESS.
+- `p_max::Float32`: Constant maximum power (5 kW) that can be delivered or accepted by the TESS.
+- `q::Float32`: Constant thermal energy capacity (200 kWh) of the storage system.
+- `η::Float32`: Constant thermal transfer efficiency (0.95) of the storage system.
 """
 @kwdef mutable struct TESS 
     # State of Charge 
@@ -112,23 +111,16 @@ A mutable struct representing a Thermal Energy Storage System (TESS) with associ
     const η ::Float32 = 0.95f0  # Thermal transfer efficiency
 end
 
-# function TESS(;soc::Real = 0.4, p::Real = 0, soc_min::Real=0.1, soc_max::Real=0.95, p_max::Real=5, q::Real=200, η::Real=0.95)
-#     TESS(Float32(soc), Float32(soc_min), Float32(soc_max), Float32(p), Float32(p_max), Float32(q), Float32(η))
-# end
-####################################################################################################
-# Heat Pump
-
 """
     HP
 
-A mutable struct representing a Heat Pump with associated properties.
+A mutable struct representing a Heat Pump system for thermal energy conversion.
 
-# Fields:
-* `e::Real`: Heat pump electrical power [kW].
-* `th::Real`: Heat pump thermal power [kW].
-* `e_max::Real`: Maximum Electrical Power that could be demanded [kW].
-* `η::Real`: Heat pump energy conversion efficiency.
-
+# Fields
+- `e::Float32`: Heat pump electrical power consumption in kilowatts (kW).
+- `th::Float32`: Heat pump thermal power output in kilowatts (kW).
+- `e_max::Float32`: Constant maximum electrical power (4 kW) that could be demanded by the heat pump.
+- `η::Float32`: Constant heat pump energy conversion efficiency/coefficient of performance (4.5).
 """
 @kwdef mutable struct HP
     e::Float32 = 0.1f0          # Heat pump electrical power [kW]
@@ -138,21 +130,30 @@ A mutable struct representing a Heat Pump with associated properties.
 
 end
 
+
 """
     STC
 
-A struct representing a Solar Thermal Collector (STC) with associated properties.
+A struct representing a Solar Thermal Collector (STC) for converting solar energy to thermal energy.
 
-# Fields:
-* `η::Real`: Conversion from Photovoltaic to Solar Thermal.
-* `th_max::Real`: Maximum thermal power output [kW].
-
+# Fields
+- `η::Float32`: Constant conversion efficiency (0.6) from photovoltaic to solar thermal energy.
+- `th_max::Float32`: Constant maximum thermal power output (2.7 kW) of the collector.
 """
 @kwdef struct STC
     η::Float32 = 0.6f0       # Conversion from Photovoltaic to Solar Thermal
     th_max::Float32 = 2.7f0  # Maximum thermal power output [kW]
 end
 
+"""
+    PEI
+
+A struct representing a Power Electronics Interface for energy conversion and management.
+
+# Fields
+- `η::Float32`: Constant conversion efficiency (0.9) of the power electronics.
+- `p_max::Float32`: Constant maximum power capacity (17 kW) of the interface.
+"""
 @kwdef struct PEI
     η::Float32 = 0.9f0
     p_max::Float32 = 17f0
@@ -162,6 +163,24 @@ end
   
 ####################################################################################################
 # Weights and constant Parameters
+"""
+    MCES_Params
+
+A struct holding reward weight parameters for the Multi-Carrier Energy System (MCES) optimization.
+
+# Fields
+- `w_init_proj::Float32`: Weight (0.5) for initial projection cost in the optimization objective.
+- `w_op_proj::Float32`: Weight (0.5) for operational projection cost in the optimization objective.
+- `w_grid::Float32`: Weight (1.0) for grid power penalty in the optimization objective.
+- `w_soc::Float32`: Weight (50.0) for EV State of Charge penalty at departure.
+- `w_ξsoc_ev::Float32`: Weight (1.0) for extra state of charge of EV (filtered).
+- `w_ξsoc_bess::Float32`: Weight (1.0) for extra state of charge of BESS (filtered).
+- `w_ξsoc_tess::Float32`: Weight (1.0) for extra state of charge of TESS (filtered).
+- `w_ξp_tess::Float32`: Weight (1.0) for extra power of TESS (filtered).
+- `w_ξp_grid::Float32`: Weight (1.0) for extra power of grid (filtered).
+- `w_loss::Float32`: Weight (0.0) for capacity losses (not implemented).
+- `c_loss::Float32`: Unit cost (0.0) of loss capacity in €/Ah (not implemented, 1.2 €/Ah noted as good estimate).
+"""
 @kwdef struct MCES_Params
     w_init_proj::Float32 = 0.5f0  # Weight for initial projection cost
     w_op_proj::Float32 = 0.5f0  # Weight for operational projection cost
@@ -183,6 +202,93 @@ end
 # Environment
 abstract type MCES_Env <: AbstractEnv end
 
+"""
+    MCES{P,T,B,E,H,S,PE} <: MCES_Env
+
+A mutable struct representing a Multi-Carrier Energy System (MCES) environment that integrates various energy assets and manages their interactions.
+
+# Type Parameters
+- `P`: Type of parameters (`MCES_Params`)
+- `T`: Type of thermal energy storage system (`TESS`)
+- `B`: Type of battery energy storage system (`Battery`)
+- `E`: Type of electric vehicle (`EV`)
+- `H`: Type of heat pump (`HP`)
+- `S`: Type of solar thermal collector (`STC`)
+- `PE`: Type of power electronic interface (`PEI`)
+
+# Fields
+## System Configuration
+- `params::P`: Parameters for weighting reward components during training.
+- `mem_safe::Bool`: Flag indicating whether memory efficiency is a concern.
+- `cum_cost_grid::Bool`: Flag indicating whether grid cost is cumulative.
+- `simple_projection::Bool`: If true, uses simplified projection approach; if false, uses predictive projection (i.e. "safe projection").
+
+## Power Flows
+- `load_e::Float32`: Electrical load in kilowatts (kW).
+- `load_th::Float32`: Thermal load in kilowatts (kW).
+- `pv::Float32`: Photovoltaic power in kilowatts (kW).
+- `st::Float32`: Solar thermal power in kilowatts (kW).
+- `grid::Float32`: Power to/from the grid in kilowatts (kW).
+
+## Pricing
+- `λ_buy::Float32`: Price to buy electricity in currency per kWh (€/kWh).
+- `λ_sell::Float32`: Price to sell electricity in currency per kWh (€/kWh).
+
+## Energy Components
+- `tess::T`: Thermal Energy Storage System.
+- `bess::B`: Battery Energy Storage System.
+- `ev::E`: Electric Vehicle.
+- `hp::H`: Heat Pump.
+- `stc::S`: Solar Thermal Collector.
+- `pei::PE`: Power Electronic Interface.
+
+## Safety and Optimization
+- `safety_model::JuMP.AbstractModel`: Optimization model used to project actions into safe space.
+- `model_type::String`: Type of optimization model (default: "NL").
+
+## Simulation Parameters
+- `rng::AbstractRNG`: Random number generator for the environment.
+- `t::Int32`: General timestep counter that doesn't reset with end of episode.
+- `t_ep::Int32`: Timestep counter within the current episode.
+- `Δt::Int32`: Constant seconds per timestep (default: 900 seconds = 15 minutes).
+- `daylength::Int32`: Constant timesteps per day (default: 96 timesteps).
+- `episode_length::Int32`: Length of an episode in timesteps.
+
+## Action Management
+- `p_ev_raw::Float32`: Unfiltered EV power in kilowatts (kW).
+- `p_bess_raw::Float32`: Unfiltered BESS power in kilowatts (kW).
+- `p_hp_e_raw::Float32`: Unfiltered heat pump electrical power in kilowatts (kW).
+
+## Reward System
+- `reward_shape::Int32`: Defines the shape of the reward function.
+- `cost_grid::Float32`: Penalty for total grid cost.
+- `cost_degradation::Float32`: Penalty for capacity lost to degradation.
+- `cost_ev::Float32`: Penalty for not charging EV to desired State of Charge.
+- `init_projection::Float32`: Penalty for initial projection of actions.
+- `grid_buffer::AbstractArray`: Buffer to store a week of prices and grid exchanges.
+
+## Constraint Violations (Initial Projection)
+- `ξp_ev::Float32`: EV power removed by filter in kilowatts (kW).
+- `ξp_bess::Float32`: BESS power removed by filter in kilowatts (kW).
+- `ξp_hp_e::Float32`: Heat pump electrical power removed by filter in kilowatts (kW).
+
+## Operational Projection
+- `op_projection::Float32`: Penalty for operational projection (constraint violations within environment).
+
+## Constraint Violations (During Operation)
+- `ξsoc_ev::Float32`: EV State of Charge violation.
+- `ξsoc_bess::Float32`: BESS State of Charge violation.
+- `ξsoc_tess::Float32`: TESS State of Charge violation.
+- `ξp_tess::Float32`: TESS power violation in kilowatts (kW).
+- `ξp_grid::Float32`: Grid power violation in kilowatts (kW).
+
+## State Representation
+- `n_actions::Int32`: Number of decisions the agent makes per timestep.
+- `n_state_vars::Int32`: Number of distinct state variables accessible to the agent.
+- `state_buffer::AbstractArray`: Buffer to store a day of state information.
+- `state_buffer_dict::Dict`: Dictionary mapping state variables to buffer indices and lags.
+- `state_buffer_ind::AbstractArray`: Matrix used to extract relevant values from the buffer.
+"""
 @kwdef mutable struct MCES{P,T,B,E,H,S,PE} <: MCES_Env
     # System parameters
     params::P = MCES_Params()
@@ -191,8 +297,6 @@ abstract type MCES_Env <: AbstractEnv end
     mem_safe::Bool = false             # Is memory efficiency a concern?
     cum_cost_grid::Bool = false        # Is the grid cost cummulative?
 
-    # If false, a prediction of the operational projection will be applied together with the initial projection, 
-    # so that most operational projection is avoided.
     simple_projection::Bool = true    
 
     # Power flows (Watts)
@@ -267,7 +371,51 @@ abstract type MCES_Env <: AbstractEnv end
     state_buffer_ind::AbstractArray = falses(14, 96)
 end
 
-# Outer constructor for memory efficiency -> converts all fields to Float32 or Int32.
+"""
+    build_MCES(; params::MCES_Params=MCES_Params(), mem_safe::Bool=false, cum_cost_grid::Bool=false, simple_projection::Bool=true, n_actions::Integer=3, n_state_vars::Integer=14, load_e::Real=0, load_th::Real=0, pv::Real=0, st::Real=0, grid::Real=0, λ_buy::Real=0, λ_sell::Real=0, tess::TESS=TESS(), bess::Battery=Battery(), ev::Union{EV,Nothing}=EV(), hp::HP=HP(), stc::STC=STC(), pei::PEI=PEI(), rng::AbstractRNG=Xoshiro(42), t::Integer=1, t_ep::Integer=1, Δt::Integer=900, episode_length::Integer=96, state_buffer_dict::Dict=Dict{Symbol, Tuple{<:Integer, Vector{<:Real}}}(), reward_shape::Integer=1, model_type::String="NL")
+
+Constructor function for creating a memory-efficient MCES environment by converting all numeric values to appropriate types.
+
+# Arguments
+- `params::MCES_Params`: Parameters for the MCES optimization (default: `MCES_Params()`).
+- `mem_safe::Bool`: Flag for memory efficiency concerns (default: `false`).
+- `cum_cost_grid::Bool`: Flag for cumulative grid cost calculation (default: `false`).
+- `simple_projection::Bool`: Flag for using simplified projection (default: `true`).
+- `n_actions::Integer`: Number of decisions per timestep (default: `3`).
+- `n_state_vars::Integer`: Number of state variables (default: `14`).
+- `load_e::Real`: Initial electrical load in kW (default: `0`).
+- `load_th::Real`: Initial thermal load in kW (default: `0`).
+- `pv::Real`: Initial photovoltaic power in kW (default: `0`).
+- `st::Real`: Initial solar thermal power in kW (default: `0`).
+- `grid::Real`: Initial grid power in kW (default: `0`).
+- `λ_buy::Real`: Initial price to buy electricity in €/kWh (default: `0`).
+- `λ_sell::Real`: Initial price to sell electricity in €/kWh (default: `0`).
+- `tess::TESS`: Thermal Energy Storage System (default: `TESS()`).
+- `bess::Battery`: Battery Energy Storage System (default: `Battery()`).
+- `ev::Union{EV,Nothing}`: Electric Vehicle (default: `EV()`). If `nothing`, creates a disabled EV.
+- `hp::HP`: Heat Pump (default: `HP()`).
+- `stc::STC`: Solar Thermal Collector (default: `STC()`).
+- `pei::PEI`: Power Electronic Interface (default: `PEI()`).
+- `rng::AbstractRNG`: Random number generator (default: `Xoshiro(42)`).
+- `t::Integer`: Initial general timestep (default: `1`).
+- `t_ep::Integer`: Initial episode timestep (default: `1`).
+- `Δt::Integer`: Seconds per timestep (default: `900`).
+- `episode_length::Integer`: Length of episode in timesteps (default: `96`).
+- `state_buffer_dict::Dict`: Dictionary mapping state variables to buffer indices and lags (default: empty).
+- `reward_shape::Integer`: Shape of reward function (default: `1`).
+- `model_type::String`: Type of optimization model (default: `"NL"`).
+
+# Returns
+- An initialized `MCES` environment with appropriate type conversions.
+
+# Details
+1. If `ev` is `nothing`, creates a disabled EV with zeroed parameters.
+2. If `state_buffer_dict` is empty, creates a default mapping of state variables to buffer indices and lags.
+3. Converts all numeric values to appropriate types (`Float32` for floating-point values, `Int32` for integers).
+4. Calculates `daylength` based on `Δt` and creates appropriate sized buffers.
+5. Initializes the state buffer index matrix using the provided or default state buffer dictionary.
+
+"""
 function build_MCES(; 
     params::MCES_Params = MCES_Params(),
     mem_safe::Bool=false,
@@ -373,25 +521,21 @@ end
 
 ####################################################################################################
 # Implementations of ReinforcementLearningBase functions
-# function RLBase.state(env::MCES_Env) 
-#     t_ep_ratio = mod1(env.t_ep, 96)/96 # Moment of the day, between 0 and 1. Independent of ep length
-#     # t_year_ratio = env.t/(365*24*3600/env.Δt) # Time of the year from 0 to 1
 
-#     # Normalized according to expanded training set. 
-#     Float32[
-#         z_score(env.load_e, 1.711f0, 1.013f0),
-#         z_score(env.load_th, 1.310f0, 0.811f0),
-#         z_score(env.pv, 0.528f0, 0.873f0),
-#         z_score(env.λ_buy, 0.242f0, 0.128f0), 
-#         z_score(env.λ_sell, 0.231f0, 0.121f0),
-#         env.tess.soc,
-#         env.bess.soc,
-#         env.ev.bat.soc, 
-#         env.ev.γ, 
-#         t_ep_ratio
-#     ]    
-# end
+"""
+    RLBase.state(env::MCES_Env)
 
+Retrieves the current state representation (feature vector) of the Multi-Carrier Energy System environment, which will be the input for the RL agent.
+
+# Arguments
+- `env::MCES_Env`: The MCES environment.
+
+# Returns
+- An array of the relevant state variables from the state buffer, selected according to the predefined state buffer indices.
+
+# Details
+The function collects data from the circular state buffer and filters it according to the boolean mask defined in `env.state_buffer_ind`.
+"""
 function RLBase.state(env::MCES_Env)
     collect(env.state_buffer)[env.state_buffer_ind] 
 end
@@ -402,18 +546,56 @@ function RLBase.state_space(env::MCES_Env)
 end
 
 # The actions are: [P_EV, P_BESS, P_HPe]
-RLBase.action_space(env::MCES_Env) = (-100.0 .. 100.0)×(-100.0 .. 100.0)×(0.0 .. 100.0)
-RLBase.action_space(env::MCES_Env, player::DefaultPlayer) = action_space(env)
+RLBase.action_space(env::MCES_Env) = (-100.0 .. 100.0)×(-100.0 .. 100.0)×(0.0 .. 100.0) # Function from ReinforcementLearning.jl, not used in my implementation, but needed to avoid some errors.
+RLBase.action_space(env::MCES_Env, player::DefaultPlayer) = action_space(env) # Function from ReinforcementLearning.jl, not used in my implementation, but needed to avoid some errors.
 
 #Is the episode terminated
+"""
+    RLBase.is_terminated(env::MCES_Env)
+
+Determines whether the current episode has terminated.
+
+# Arguments
+- `env::MCES_Env`: The MCES environment.
+
+# Returns
+- `true` if the current episode timestep exceeds the defined episode length, `false` otherwise.
+"""
 RLBase.is_terminated(env::MCES_Env) = env.t_ep > env.episode_length
-#Reseed the RNG
+
+# Reseed the RNG
+"""
+    Random.seed!(env::MCES_Env, seed::Integer)
+
+Sets the random number generator seed for the MCES environment.
+
+# Arguments
+- `env::MCES_Env`: The MCES environment.
+- `seed::Integer`: The seed value for the random number generator.
+
+# Returns
+- The result of calling `Random.seed!` on the environment's random number generator.
+"""
 Random.seed!(env::MCES_Env, seed::Integer) = Random.seed!(env.rng, seed)
 
 
 
-# Basic Reset, performed everytime an experiment starts and at the end of an episode.
-# Doesn't affect the global timestep of the env.  
+"""
+    RLBase.reset!(env::MCES_Env)
+
+Performs a basic reset of the MCES environment at the start of a new episode.
+
+# Arguments
+- `env::MCES_Env`: The MCES environment to reset.
+
+# Returns
+- `nothing`
+
+# Details
+1. Resets the grid cost to zero (important when using cumulative cost calculation).
+2. Resets the episode timestep counter to 1.
+3. Does not affect the global timestep of the environment.
+"""
 function RLBase.reset!(env::MCES_Env)
     env.cost_grid = 0f0 # Reset so that if cummulative then only a day is considered. This can be modified. 
     env.t_ep = Int32(1)
@@ -426,23 +608,28 @@ end
 """
     (env::MCES_Env)(decision)
 
-Updates the environment object (env) with valid power levels for EV, BESS, and Heat Pump based on the proposed decision.
+Updates the environment object with valid power levels for EV, BESS, and Heat Pump based on the proposed decision vector (produced by the Agent).
 
-# Args:
+# Arguments
+- `env::MCES_Env`: The MCES environment object.
+- `decision`: A vector containing proposed power levels for EV, BESS, and Heat Pump (in kW).
 
-* `env`: The MCES environment object.
-* `decision`: A list containing proposed power levels for EV, BESS, and Heat Pump (electric).
-
-# Returns:
-
-* `nothing`. The function updates the environment object (`env`) in-place.
+# Returns
+- `nothing`: The function updates the environment object in-place.
 
 # Details
-1. Extracts EV battery, BESS, and Heat Pump objects from the environment.
-2. Calls `valid_actions` to project proposed power levels into valid ones for the current state.
-3. Updates power levels in EV, BESS, and Heat Pump objects within the environment.
-4. Calculates and assigns a penalty for the projection.
+1. Adjusts the EV power demand based on its availability in the energy management system (`in_EMS`).
+2. Stores the raw (potentially unsafe) decision values in the environment for logging purposes.
+3. Updates the internal safe projection model state via `update_model!`.
+4. Projects the decision vector into a feasible action space using `valid_actions!`.
+5. Calculates and stores penalties for initial constraint violations.
+6. Updates the power levels in the EV battery, BESS, and Heat Pump components:
+   - EV battery power (electrical) in kW
+   - BESS power (electrical) in kW
+   - Heat Pump electrical consumption in kW
+   - Heat Pump thermal output in kWt (calculated using the heat pump efficiency)
 
+The `simple_projection` flag in the environment determines which projection method is used.
 """
 function (env::MCES_Env)(decision)
     #Extracting components from the Env
@@ -481,6 +668,27 @@ end
 ####################################################################################################
 # Reset options
 
+"""
+    energy_reset!(env::MCES_Env)
+
+Resets the energy storage components in the MCES environment to their default states.
+
+# Arguments
+- `env::MCES_Env`: The MCES environment.
+
+# Returns
+- `nothing`
+
+# Details
+1. Resets Battery Energy Storage System (BESS) to default values:
+   - State of Charge: 0.5
+   - Current: 0.0
+   - Voltage: rated voltage
+2. If the Electric Vehicle (EV) is part of the Energy Management System:
+   - Resets its battery to similar default values
+3. Resets Thermal Energy Storage System (TESS) to default State of Charge (0.4)
+4. Resets Heat Pump to default electrical (0.1 kW) and thermal (0.45 kW) power levels
+"""
 function energy_reset!(env::MCES_Env)
     # Reset Battery
     env.bess.soc = 0.5f0
@@ -503,6 +711,17 @@ function energy_reset!(env::MCES_Env)
     nothing
 end
 
+"""
+    exogenous_reset!(env::MCES_Env)
+
+Resets all exogenous (external) variables in the MCES environment to zero.
+
+# Arguments
+- `env::MCES_Env`: The MCES environment.
+
+# Returns
+- `nothing`
+"""
 @inline function exogenous_reset!(env::MCES_Env)
     # Reset exogenous information
     env.load_e = 0f0
@@ -519,6 +738,30 @@ end
     nothing
 end
 
+"""
+    total_recall!(env::MCES_Env, rng::AbstractRNG = Xoshiro(42))
+
+Performs a complete reset of the MCES environment to its initial state.
+
+# Arguments
+- `env::MCES_Env`: The MCES environment.
+- `rng::AbstractRNG`: Random number generator to use (default: Xoshiro(42)).
+
+# Returns
+- `nothing`
+
+# Details
+1. Calls `energy_reset!` to reset all energy storage components.
+2. Calls `exogenous_reset!` to reset all exogenous variables.
+3. Resets the random number generator and episode timestep.
+4. Resets all penalty and cost values to zero:
+   - Initial projection penalty
+   - Operational projection penalty
+   - Grid cost
+   - Degradation cost
+   - EV cost
+5. Clears the state buffer and grid buffer by setting all values to zero.
+"""
 function total_recall!(env::MCES_Env, rng::AbstractRNG = Xoshiro(42))
     
     energy_reset!(env)

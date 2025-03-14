@@ -1,25 +1,75 @@
+# Defining Hook objects
+"""
+    MCES_Hook <: AbstractHook
 
-#############################################
-# Personalized Basic hook. For efficient operation. 
+A hook for recording rewards during episodes in the MCES environment. 
+Designed for debugging purposes, it keeps track of individual rewards and their components.
 
-@kwdef mutable struct MCES_Fast_Hook{V} <: AbstractHook
-    episode_rewards::V = Float32[]
+# Fields
+- `episode_rewards::Vector{Real}`: Vector storing the rewards obtained in each episode.
+- `reward::Real`: Accumulated reward for the current episode.
+- `reward_dissect::Dict{String, Vector{Real}}`: Dictionary to dissect and store different 
+  components of rewards (costs with inverted signs).
+- `energy::Dict{String, Vector{Real}}`: Dictionary to store energy-related metrics during episodes.
+- `debug::Dict{String, Vector{Real}}`: Dictionary to store debugging information.
+"""
+@kwdef mutable struct MCES_Hook{V,D} <: AbstractHook
+    episode_rewards::V = sizehint!(Float32[], 5000)
     reward::Float32 = 0.0f0
+    reward_dissect::D = Dict{String, Vector{Float32}}()
+    energy::D = Dict{String, Vector{Float32}}()
+    debug::D = Dict{String,Vector{Float32}}()
 end
 
-Base.getindex(h::MCES_Fast_Hook) = h.episode_rewards
+# Empty Hook 
+"""
+    VoidHook <: AbstractHook
 
-@inline function (h::MCES_Fast_Hook)(::PostActStage, agent, env) 
-    h.reward += reward(env)
+A minimal hook implementation that doesn't record any information.
+Used when no monitoring is needed to reduce memory overhead.
+"""
+struct VoidHook <: AbstractHook end
+
+"""
+    MCES_Moderate_Hook{V, D} <: AbstractHook
+
+A memory-efficient version of MCES_Hook that uses Float16 to reduce memory usage. Focused exclusively on tracking rewards. 
+Suitable for longer training runs (or multithreading) where memory efficiency is more important than precision.
+
+# Fields
+- `episode_rewards::V`: Vector storing the rewards obtained in each episode.
+- `reward::Float16`: Accumulated reward for the current episode.
+- `reward_dissect::D`: Dictionary to dissect and store different components of rewards.
+"""
+@kwdef mutable struct MCES_Moderate_Hook{V, D} <: AbstractHook # Memory efficient hook.
+    episode_rewards::V = sizehint!(Float16[], 3500)
+    reward::Float16 = Float16(0.0)
+    reward_dissect::D = Dict{String, Vector{Float16}}()
 end
 
-function (h::MCES_Fast_Hook)(::PostEpisodeStage, agent, env)
-    push!(h.episode_rewards, h.reward)
-    h.reward = 0.0f0
-end
-
-#############################################
+####################################################
 # Hook Specific Functions
+"""
+    create_reward_dissect(; mem_safe = false)
+
+Creates a dictionary to store different components of rewards for analysis.
+
+# Arguments
+- `mem_safe::Bool`: If true, uses Float16 for memory efficiency; otherwise uses Float32 for precision.
+
+# Returns
+- `Dict{String, Vector{Float{16|32}}}`: Dictionary with pre-allocated vectors for different reward components.
+
+# Components
+The dictionary contains the following keys:
+- "Initial Projection": Initial projection-related rewards
+- "Op. Projection": Operational projection-related rewards
+- "Grid": Grid-related rewards
+- "EV": Electric vehicle-related rewards
+- "Degradation": Degradation-related rewards
+- "Clamped Reward": Rewards after clamping operations
+- "Real Reward": Actual rewards received
+"""
 function create_reward_dissect(;mem_safe = false)
     if mem_safe
         return Dict{String, Vector{Float16}}(
@@ -34,6 +84,27 @@ function create_reward_dissect(;mem_safe = false)
     end
 end
 
+"""
+    create_energy_dict()
+
+Creates a dictionary to store energy-related metrics during simulation.
+
+# Returns
+- `Dict{String, Vector{Float32}}`: Dictionary with pre-allocated vectors for different energy components.
+
+# Components
+The dictionary contains keys for various energy-related measurements including:
+- Load-related: "load_e", "load_th"
+- Generation: "pv"
+- Storage: "st", "p_tess", "soc_tess", "p_bess", "p_bess_raw", "soc_bess"
+- Electric vehicle: "p_ev", "p_ev_raw", "γ_ev", "soc_ev"
+- Heat pump: "p_hp_e", "p_hp_e_raw", "p_hp_th"
+- Grid: "grid"
+- Time: "t"
+- Electrical: "i_bess", "v_bess", "i_ev", "v_ev"
+- Constraint violations: "ξp_ev", "ξp_bess", "ξp_hp_e", "ξsoc_ev", 
+  "ξsoc_bess", "ξsoc_tess", "ξp_tess", "ξp_grid"
+"""
 function create_energy_dict()
     Dict{String, Vector{Float32}}(
         key => sizehint!(Float32[], 250000) for key in [
@@ -48,6 +119,20 @@ function create_energy_dict()
     )
 end
 
+"""
+    create_debug_vpg_dict()
+
+Creates a dictionary to store debugging information for the Vanilla Policy Gradient (VPG) algorithm.
+
+# Returns
+- `Dict{String, Vector{Float32}}`: Dictionary with pre-allocated vectors for different VPG metrics.
+
+# Components
+The dictionary contains keys for various VPG-specific metrics including:
+- Training statistics: "avg_adv", "avg_loss", "raw_avg_loss", "actor_loss", "critic_loss", "δ"
+- Gradient information: "actor_norm", "critic_norm"
+- Distribution metrics: "mean", "std" (with larger pre-allocated buffers)
+"""
 function create_debug_vpg_dict()
     d = Dict{String, Vector{Float32}}(
         key => sizehint!(Float32[], 16000) for key in [
@@ -59,6 +144,20 @@ function create_debug_vpg_dict()
     d
 end
 
+"""
+    create_debug_a2c_dict()
+
+Creates a dictionary to store debugging information for the Advantage Actor-Critic (A2C) algorithm.
+
+# Returns
+- `Dict{String, Vector{Float32}}`: Dictionary with pre-allocated vectors for different A2C metrics.
+
+# Components
+The dictionary contains keys for various A2C-specific metrics including:
+- Training statistics: "avg_adv", "avg_loss", "raw_avg_loss", "actor_loss", "critic_loss", "entropy_loss", "δ"
+- Gradient information: "actor_norm", "critic_norm"
+- Distribution metrics: "mean", "std" (with larger pre-allocated buffers)
+"""
 function create_debug_a2c_dict()
     d = Dict{String, Vector{Float32}}(
         key => sizehint!(Float32[], 16000) for key in [
@@ -70,6 +169,21 @@ function create_debug_a2c_dict()
     d
 end
 
+"""
+    create_debug_ppo_dict()
+
+Creates a dictionary to store debugging information for the Proximal Policy Optimization (PPO) algorithm.
+
+# Returns
+- `Dict{String, Vector{Float32}}`: Dictionary with pre-allocated vectors for different PPO metrics.
+
+# Components
+The dictionary contains keys for various PPO-specific metrics including:
+- Training statistics: "avg_adv", "avg_loss", "raw_avg_loss", "actor_loss", "critic_loss", "entropy_loss", "δ"
+- Gradient information: "actor_norm", "critic_norm"
+- PPO-specific metrics: "clip_fracs" (clipping fraction), "approx_kl" (approximate KL divergence)
+- Distribution metrics: "mean", "std" (with larger pre-allocated buffers)
+"""
 function create_debug_ppo_dict()
     d = Dict{String, Vector{Float32}}(
         key => sizehint!(Float32[], 16000) for key in [
@@ -81,25 +195,8 @@ function create_debug_ppo_dict()
     d
 end
 #############################################
-# Personalized hook. For debugging. 
-"""
-    MCES_Hook <: AbstractHook
-
-A hook for recording rewards during episodes. Made for debugging. Keeps track of individual rewards. 
-
-# Fields:
-- `episode_rewards::Vector{Real}`: Vector to store the rewards obtained in each episode.
-- `reward::Real`: Accumulated reward for the current episode.
-- `reward_dissect::Dict{AbstractString, Vector{Real}}`: Dictionary to dissect and store different components of rewards (costs with inverted signs).
-
-"""
-@kwdef mutable struct MCES_Hook{V,D} <: AbstractHook
-    episode_rewards::V = sizehint!(Float32[], 5000)
-    reward::Float32 = 0.0f0
-    reward_dissect::D = Dict{String, Vector{Float32}}()
-    energy::D = Dict{String, Vector{Float32}}()
-    debug::D = Dict{String,Vector{Float32}}()
-end
+# MCES_Hook functionality
+# Each function represents the actions performed with the Hook ina particular stage of the run (e.g. PreActStage, PostEpisodeStage...)
 
 Base.getindex(h::MCES_Hook) = h.episode_rewards
 
@@ -327,18 +424,8 @@ function (h::MCES_Hook)(::PostExperimentStage, agent::Agent{<:PPO}, env)
     nothing
 end
 
-#####################################################################################################
-# Empty Hook basically
-struct VoidHook <: AbstractHook end
-
-#####################################################################################################
-# Memory optimised MCES_Hook
-
-@kwdef mutable struct MCES_Moderate_Hook{V, D} <: AbstractHook
-    episode_rewards::V = sizehint!(Float16[], 3500)
-    reward::Float16 = Float16(0.0)
-    reward_dissect::D = Dict{String, Vector{Float16}}()
-end
+#####################################################
+# VoidHook and Moderate Hook functionality
 
 Base.getindex(h::MCES_Moderate_Hook) = h.episode_rewards
 

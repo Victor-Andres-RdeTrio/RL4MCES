@@ -1,7 +1,7 @@
 # Print in the REPL
 
 
-function print_hook_REPL(hook::Union{MCES_Hook,MCES_Fast_Hook})
+function print_hook_REPL(hook::Union{MCES_Hook, MCES_Moderate_Hook})
     println(
             UnicodePlots.lineplot(
                 hook.episode_rewards,
@@ -476,7 +476,7 @@ end
 ##########################################################################
 # Plotting Rewards
 
-function plot_reward(hook::Union{MCES_Hook,MCES_Moderate_Hook,MCES_Fast_Hook}; smooth::Int = 0)
+function plot_reward(hook::Union{MCES_Hook,MCES_Moderate_Hook}; smooth::Int = 0)
     episodes = 1:length(hook.episode_rewards)
     smooth_rwds = Smoothing.binomial(hook.episode_rewards, smooth)
     p = Plots.plot(episodes, smooth_rwds,
@@ -493,8 +493,8 @@ function plot_reward(hook::Union{MCES_Hook,MCES_Moderate_Hook,MCES_Fast_Hook}; s
     p
 end
 
-function plot_reward(hook1::Union{MCES_Hook,MCES_Moderate_Hook,MCES_Fast_Hook}, 
-                     hook2::Union{MCES_Hook,MCES_Moderate_Hook,MCES_Fast_Hook}; 
+function plot_reward(hook1::Union{MCES_Hook,MCES_Moderate_Hook}, 
+                     hook2::Union{MCES_Hook,MCES_Moderate_Hook}; 
                      smooth::Int = 0, 
                      label1::String = "Hook 1", 
                      label2::String = "Hook 2")

@@ -22,6 +22,8 @@ The code in this folder enables the system to learn near-optimal control strateg
 
 - **replay.jl**: Implements a replay mechanism for reproducing predefined action sequences from historical data, supporting direct comparisons with MPC experts.
 
-- **behav_cloning.jl**: Enables behavioral cloning for imitation learning. Warning: this functionality was not included in the master thesis and was only tested during initial stages of development.
+- **behav_cloning.jl**: Enables behavioral cloning for imitation learning. 
+  - *Warning: this functionality was not included in the master thesis and was only tested during initial stages of development*.
 
-- **stop.jl**: Implements early stopping mechanisms based on performance metrics. Warning: this functionality was not included in the master thesis and was only tested during initial stages of development.
+- **stop.jl**: Implements early stopping mechanisms based on performance metrics. 
+  - *Warning: this functionality was not included in the master thesis and was only tested during initial stages of development*.

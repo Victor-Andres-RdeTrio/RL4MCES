@@ -67,6 +67,20 @@ function check_required_keys(dict::Dict, required_keys::Vector{String})
     end
 end
 
+"""
+    print_last_values(dict::Dict, shift::Int = 0)
+
+Print the last values of arrays stored in a dictionary, with optional display of multiple trailing values.
+
+# Arguments
+- `dict::Dict`: A dictionary containing key-value pairs where values are arrays.
+- `shift::Int = 0`: Number of additional trailing values to display before the last value. Default is 0 (only shows the last value).
+
+# Details
+- For numeric arrays: Rounds values to 6 decimal places.
+- For string values: Displays only the last character.
+- Prints "Failed" for empty arrays or non-array values.
+"""
 function print_last_values(dict::Dict, shift::Int = 0)
     for (key, value) in dict
         if value isa AbstractArray && !isempty(value)
@@ -83,6 +97,25 @@ function print_last_values(dict::Dict, shift::Int = 0)
     end
 end
 
+"""
+    find_dif(a::Vector, b::Vector; first::Bool = true)
+
+Find positions where two vectors have different values.
+
+# Arguments
+- `a::Vector`: First vector to compare.
+- `b::Vector`: Second vector to compare.
+- `first::Bool = true`: If true, returns only the first difference position; if false, returns all difference positions.
+
+# Returns
+- If `first=true`: Index of the first difference found, or nothing if vectors are identical.
+- If `first=false`: Array of indices where differences exist, or empty array if vectors are identical.
+
+# Notes
+- Converts inputs to Float32 for comparison.
+- Prints "Different Length" and returns nothing if vectors have different lengths.
+"""
+
 function find_dif(a::Vector , b::Vector ; first::Bool = true)
     length(a) == length(b) ? nothing : return println("Different Length")
     a = Float32.(a)
@@ -91,16 +124,22 @@ function find_dif(a::Vector , b::Vector ; first::Bool = true)
     return first ? findfirst(c-> c > 0, c) : findall(c-> c > 0, c)
 end
 
-function to_dict(exog::Exogenous_BatchCollection)
-    dict = Dict{String, Any}()
 
-    for field in fieldnames(typeof(exog))
-        dict[string(field)] = getfield(exog, field)
-    end
-    
-    return dict
-end
+"""
+    print_dict_to_file(dict::Dict, filename::String; title="Training Information")
 
+Write dictionary contents to a file in a structured, hierarchical format with sorted keys.
+
+# Arguments
+- `dict::Dict`: The dictionary to write to file.
+- `filename::String`: Path to the output file (will be appended to if file exists).
+- `title::String = "Training Information"`: Optional title for the output section.
+
+# Details
+- Writes nested dictionaries with increased indentation and section markers.
+- Sorts dictionary keys alphabetically for consistent output.
+- Formats output with section markers (===) for better readability.
+"""
 function print_dict_to_file(dict::Dict, filename::String; title="Training Information")
     open(filename, "a") do file
         write(file, "=============================\n")
@@ -138,24 +177,54 @@ function write_best_seeds(array::Vector, filename::String; append = false)
         end
     end
 end
+
+"""
+    double_backslashes(path::String)
+
+Replace single backslashes with double backslashes in a file path string.
+
+# Arguments
+- `path::String`: Input file path string.
+
+# Returns
+- `String`: Path with all single backslashes replaced by double backslashes.
+
+# Notes
+- Intended for use with raw string literals, e.g., `double_backslashes(raw"C:\\Users\\...\\file.jld2")`.
+"""
+function double_backslashes(path::String)
+    # The string must have "raw" before, to be accepted by the function.
+    # Example -> raw"C:\Users\...\file.jld2"
+    return replace(path, "\\" => "\\")
+end
+
 ##################################################################################
 
 
 """
-    limit_battery_power(power, battery::Battery, Δt)
+    limit_battery_power(power_kW, bat::Battery, Δt, simple::Bool = false)
 
-Limits the power output of a battery device to safe levels based on its desing characteristics. 
-Also guarantees that the SoC min and max levels are respected. 
-Takes in Power in kW, turns it into W, and then outputs kW. 
-The Coulombic efficiency will be <1 when discharging and =1 when charging.
+Limits the power output of a battery device to safe levels based on its design characteristics.
+Also guarantees that the SoC min and max levels are respected.
+Takes in power in kW and outputs power in kW.
+The Coulombic efficiency will be <1 when charging and =1 when discharging.
 
-# Args:
-    * `power`: Proposed power level for the battery device.
-    * `battery`: Battery device object containing specifications and state information.
-    * `Δt`: Time step size.
+# Arguments
+- `power_kW::Float32`: Proposed power level for the battery device in kW.
+- `bat::Battery`: Battery device object containing specifications and state information.
+- `Δt::Float32`: Time step size in seconds.
+- `simple::Bool`: If true, performs basic power clamping without SoC considerations (optional, defaults to `false`).
 
-# Returns:
-    The limited power output for the battery device.
+# Returns
+- The limited power output for the battery device in kW.
+
+# Details
+1. If `simple` is true, simply clamps power between negative and positive `p_max` (known as "simple projection").
+2. Converts power from kW to W for internal calculations.
+3. Determines charging efficiency (`η_c`) based on power direction (<0 is charging, >0 is discharging).
+4. Calculates current (`i`) using battery parameters and efficiency.
+5. Computes safe current limits (`i_max`, `i_min`) based on SoC constraints and safety factor.
+6. Clamps the current and converts back to power in kW, ensuring it's within theoretical and rated limits.
 """
 function limit_battery_power(power_kW, bat::Battery, Δt, simple::Bool = false)
     if simple
@@ -175,37 +244,50 @@ function limit_battery_power(power_kW, bat::Battery, Δt, simple::Bool = false)
     return clamp(i_safe_soc * bat.v * bat.Np * bat.Ns * η_c / 1000, -p_lim, p_lim)
 end
 
+"""
+    max_power(bat::Battery)::Float32
+
+Calculates the theoretical maximum power capability of a battery based on its electrical characteristics.
+
+# Arguments
+- `bat::Battery`: Battery device object containing specifications.
+
+# Returns
+- The theoretical maximum power output in kW.
+
+# Details
+Multiplies the rated voltage, maximum current, and number of cells in parallel and series,
+then divides by 1000 to convert from W to kW.
+"""
 @inline function max_power(bat::Battery)::Float32
     bat.v_rated * bat.i_max * bat.Np * bat.Ns / 1000  # Output in kW
 end
 
+
 """
-    limit_hp_power(power, env::MCES_Env)
+    limit_hp_power(power, env::MCES_Env, simple::Bool = false)
 
 Limits the heat pump (HP) power to ensure the state of charge (SoC) of the thermal energy storage system (TESS) remains within safe limits.
 
 # Arguments
-- `power::Float32`: The desired power for the heat pump.
+- `power::Float32`: The desired power for the heat pump in kW.
 - `env::MCES_Env`: The environment structure containing relevant properties of the heat pump, TESS, load, etc.
+- `simple::Bool`: If true, performs basic power clamping without SoC considerations (optional, defaults to `false`).
 
 # Returns
-- The limited power that can be demanded from the heat pump.
+- The limited power that can be demanded from the heat pump in kW.
 
 # Details
-1. `safety_factor`: A factor (0.9) used to prevent SoC from slightly exceeding limits due to decimal precision issues or considerable changes in exogenous info.
-2. `tess`: The TESS component of the environment.
-3. `hp`: The heat pump component of the environment.
-4. `p_tess_max`: Maximum allowable power for TESS calculated based on the SoC, minimum SoC, capacity (`q`), and time step (`Δt`).
-5. `p_tess_min`: Minimum allowable power for TESS calculated similarly to `p_tess_max`.
-6. `hp_th`: Theoretical HP power, clamped to ensure it's within the operational range of the heat pump.
-7. `p_tess`: Actual power entering or leaving the TESS, calculated as the difference between thermal load and sum of solar thermal input and HP power.
-8. `η_th`: Thermal efficiency factor for TESS, adjusted based on whether `p_tess` is positive (discharging) or negative (charging).
-9. `p_tess_soc`: The power that will update the SoC, adjusted by the efficiency factor.
-10. `p_tess_safe_soc`: Clamped value of `p_tess_soc` to ensure it stays within the calculated safe limits (`p_tess_min` and `p_tess_max`).
-11. `hp_e_safe_soc`: The power demand for the heat pump, ensuring it remains within the allowable range for updating the TESS SoC.
-12. The function returns the clamped `hp_e_safe_soc`, which will satisfy the HP limits and likely the TESS SoC limits. This last satisfaction will be guaranteed by the exogenous! update. 
+1. If `simple` is true, simply clamps power between 0 and `hp.e_max`.
+2. `safety_factor`: A factor (default 1.0) used to adjust the SoC limits for safety margin.
+3. Calculates maximum and minimum allowable TESS power based on SoC constraints.
+4. Computes theoretical HP thermal output (`hp_th`) based on input power and efficiency.
+5. Determines power entering/leaving the TESS (`p_tess`) as the difference between thermal load and the input to MCES environment by HP and solar thermal.
+6. Applies appropriate thermal efficiency based on whether TESS is charging or discharging.
+7. Clamps the TESS power within safe limits and back-calculates the corresponding HP electrical input power.
+8. Returns the HP input power, clamped to its operational range.
 
-This function only works on the current timestep, so a big change in the thermal load or the solar thermal output will make the defined limits unsafe. This situation is compensated by the safety factor.
+This function operates on the current timestep only. Significant changes in thermal load or solar thermal output between steps may impact the effectiveness of the SoC limits, which is partly mitigated by the safety factor.
 """
 function limit_hp_power(power, env::MCES_Env, simple::Bool = false)
     hp = env.hp
@@ -241,7 +323,7 @@ Updates the state of charge (SoC) of the battery based on the power demanded and
 
 # Arguments
 - `bat::Battery`: The battery whose SoC needs to be updated.
-- `env::MCES_Env`: The MCES environment, it contains the timestep in seconds.
+- `env::MCES_Env`: The MCES environment, containing the timestep in seconds.
 - `power_kW::Float32`: The power in kW (optional, defaults to `bat.p`).
 - `η::Float32`: The efficiency (optional, defaults to `bat.η_c`).
 
@@ -251,6 +333,8 @@ Updates the state of charge (SoC) of the battery based on the power demanded and
 # Details
 1. Converts the provided power from kW to W.
 2. Determines the charging efficiency (`η_c`) based on the direction of power flow.
+   When power is positive (discharging), efficiency is applied as is; when negative (charging), 
+   the inverse of efficiency is used.
 3. Calculates the current (`i`) using the battery parameters.
 4. Updates the SoC and clamps it within the safe limits, returning the amount of clamping.
 """
@@ -280,20 +364,28 @@ function update_tess_soc!(tess::TESS, env::MCES_Env)::Float32
     return extra_tess_soc
 end
 
-####################################################################################################
-# Voltage Updates
-
 @inline function update_voltage!(bat::Battery)
     bat.v = bat.a + bat.b * bat.soc
 end
 
 
-
-    
-
-
 #########################################################################################
 # Assigning Distributions from the Agent's decisions. 
+"""
+    action_distribution(dist::Type{T}, model_output) where {T<:ContinuousDistribution}
+
+Create a vector of probability distributions from model outputs. Imported directly from ReinforcementLearning.jl
+
+# Arguments
+- `dist::Type{T}`: The type of continuous distribution to use (e.g., `Normal`, `Uniform`).
+- `model_output`: Matrix where each column contains parameters for a distribution.
+
+# Returns
+- Vector of probability distributions, one for each column in the input matrix.
+
+# Details
+Maps the distribution constructor to each column of model_output using the column values as distribution parameters.
+"""
 @inline function action_distribution(dist::Type{T}, model_output) where {T<:ContinuousDistribution}
     map(col -> dist(col...), eachcol(model_output))
 end
@@ -303,20 +395,16 @@ end
 
 Convert a matrix of model outputs into a vector of Gaussian distributions.
 
-This function is similar to `Gaussian_withgrad`, but it returns a vector
-instead of a matrix. Also, it doesn't use the Zygote.Buffer, so no gradients can be backpropagated.
-
 # Arguments
-- `model_output::Matrix{Float32}`: A matrix with 2 rows. The first row
-  contains means, and the second row contains standard deviations for
-  each action.
+- `model_output::Matrix{Float32}`: A matrix with 2 rows where the first row contains means and the second row contains standard deviations.
 
 # Returns
-- `Vector{Normal{Float32}}`: A vector where each element is a
-  `Normal{Float32}` distribution corresponding to each column of the input.
+- `Vector{Normal{Float32}}`: A vector where each element is a Gaussian distribution corresponding to each column of the input.
 
-# Note
-Benchmarked against using map!, but a for loop is faster and has less allocations. Julia compiler magic.
+# Details
+- Creates Normal distributions without using Zygote.Buffer, meaning no gradients can be backpropagated.
+- More efficient than using map! due to compiler optimizations.
+- This function is similar to `Gaussian_withgrad`, but it returns a vector instead of a matrix.
 """
 @inline function Gaussian_actions(model_output::Matrix{Float32}) 
     number_of_actions = size(model_output, 2)
@@ -328,32 +416,25 @@ Benchmarked against using map!, but a for loop is faster and has less allocation
     buf
 end
 
-# function Gaussian_actions(model_output::Vector{Float32})
-    
-# end
 
 
 """
     action_distribution_withgrad(dist::Type{T}, model_output) where {T<:ContinuousDistribution}
 
-Create an array of probability distributions from the Neural Network model output, which represents the means and standard deviations of the actions to take.
+Create an array of probability distributions from neural network outputs with gradient support.
 
 # Arguments
-- `dist::Type{T}`: The type of continuous distribution to be used (e.g., `Normal`, `Uniform`).
-- `model_output`: A matrix or vector representing the parameters for distributions. Means on first row and Stds on second. 
+- `dist::Type{T}`: The type of continuous distribution to use (e.g., `Normal`).
+- `model_output`: Matrix where each column contains distribution parameters (means in first row, standard deviations in second).
 
 # Returns
-An `Array` of probability distributions based on the input of means and standard deviations.
+- Array of probability distributions with gradient tracking preserved.
 
 # Details
-This function performs the following steps:
-1. Reshapes `model_output` to ensure it has 2 rows (if necessary).
-2. Determines the number of actions based on the number of columns in the reshaped input.
-3. Uses a `Buffer` for memory allocation within the Zygote gradient calculation.
-4. Creates a distribution for each column of the reshaped input.
-5. Copies the buffer to a standard Array before returning.
-
-The function is designed to handle model outputs that may not be in the exact shape required for distribution creation.
+1. Ensures input has correct shape (2 rows) by reshaping if necessary.
+2. Uses Zygote.Buffer for memory allocation within gradient calculations.
+3. Creates distributions for each column of parameters.
+4. Returns a gradient-compatible array of distributions.
 """
 function action_distribution_withgrad(dist::Type{T}, model_output) where {T<:ContinuousDistribution}
     dist_param = size(model_output)[1] != 2 ? reshape(model_output, 2, :) : model_output
@@ -368,25 +449,18 @@ end
 
 
 """
-    Gaussian_withgrad(model_output::Matrix{Float32})
+    Gaussian_withgrad(model_output)
 
-Convert a matrix of model outputs into an array of Gaussian distributions.
-
-This function takes a matrix where each column represents the parameters
-(mean and standard deviation) of a Gaussian distribution. It returns a
-matrix of `Normal{Float32}` distributions.
+Convert model outputs into an array of Gaussian distributions with gradient support.
 
 # Arguments
-- `model_output::Matrix{Float32}`: A matrix with 2 rows. The first row
-  contains means, and the second row contains standard deviations for
-  each action.
+- `model_output`: Matrix with 2 rows containing means (row 1) and standard deviations (row 2).
 
 # Returns
-- `Matrix{Normal{Float32}}`: A matrix where each element is a
-  `Normal{Float32}` distribution corresponding to each column of the input.
+- Matrix of Normal{Float32} distributions with gradient tracking preserved.
 
-# Note
-This function uses a `Zygote.Buffer` for intermediate storage, allowing to backpropagate the gradients.
+# Details
+Uses Zygote.Buffer for intermediate storage to allow gradient backpropagation through the operation.
 """
 function Gaussian_withgrad(model_output) 
     number_of_actions = size(model_output, 2) #expects model output to have 2 rows (mean and std)
@@ -401,8 +475,40 @@ end
 
 #########################################################################################
 # Gradient Clipping
+"""
+    global_norm(gs, ps)
+
+Calculate the global norm of gradients across multiple parameters. Imported directly from ReinforcementLearning.jl
+
+# Arguments
+- `gs`: Gradient dictionary/collection.
+- `ps`: Parameter collection to include in the norm calculation.
+
+# Returns
+- The square root of the sum of squared gradient values across all parameters.
+"""
 global_norm(gs, ps) = sqrt(sum(mapreduce(x -> x^2, +, gs[p]) for p in ps))
 
+
+"""
+    clip_by_global_norm!(gs, ps, clip_norm::Float32; noise::Bool = false)
+
+Clip gradients by their global norm in-place. Imported from ReinforcementLearning.jl and added noise. 
+
+# Arguments
+- `gs`: Gradient dictionary/collection to modify.
+- `ps`: Parameter collection to include in clipping.
+- `clip_norm::Float32`: Maximum allowed global norm value.
+- `noise::Bool = false`: Whether to add small noise to gradients.
+
+# Returns
+- The global norm value before clipping.
+
+# Details
+1. Calculates the global norm of gradients.
+2. If the norm exceeds `clip_norm`, scales all gradients by the ratio clip_norm/global_norm.
+3. Optionally adds small noise (1e-4) to gradients if `noise` is true.
+"""
 function clip_by_global_norm!(gs, ps, clip_norm::Float32; noise::Bool = false)
     gn = global_norm(gs, ps)
     if clip_norm <= gn
@@ -415,79 +521,6 @@ function clip_by_global_norm!(gs, ps, clip_norm::Float32; noise::Bool = false)
     end
     gn
 end
-
-#########################################################################################
-# Hyperparameter tuning
-
-function hook_params(hooks::AbstractHook...; grid_weight::Real = 1.0, ev_weight::Real = 1.0, init_proj_weight::Real = 1.0, op_proj_weight::Real = 1.0)
-    grid_means = Float32[]
-    grid_stds = Float32[]
-    ev_means = Float32[]
-    ev_stds = Float32[]
-    init_proj_means = Float32[]
-    init_proj_stds = Float32[]
-    op_proj_means = Float32[]
-    op_proj_stds = Float32[]
-    
-    for hook in hooks
-        dissection = hook.reward_dissect
-        grid_cost = dissection["Grid"] .* grid_weight
-        ev_cost = dissection["EV"] .* ev_weight
-        init_proj_cost = dissection["Initial Projection"] .* init_proj_weight
-        op_proj_cost = dissection["Op. Projection"] .* op_proj_weight
-
-        grid_mean = mean(grid_cost)
-        grid_std = std(grid_cost)
-
-        non_zero_ev_cost = filter(x -> x != 0, ev_cost)
-        ev_mean = isempty(non_zero_ev_cost) ? 0.0 : mean(non_zero_ev_cost)
-        ev_std = isempty(non_zero_ev_cost) ? 0.0 : std(non_zero_ev_cost) 
-
-        init_proj_mean = mean(init_proj_cost)
-        init_proj_std = std(init_proj_cost)
-        
-        op_proj_mean = mean(op_proj_cost)
-        op_proj_std = std(op_proj_cost)
-
-        push!(grid_means, grid_mean)
-        push!(grid_stds, grid_std)
-        push!(ev_means, ev_mean)
-        push!(ev_stds, ev_std)
-        push!(init_proj_means, init_proj_mean)
-        push!(init_proj_stds, init_proj_std)
-        push!(op_proj_means, op_proj_mean)
-        push!(op_proj_stds, op_proj_std)
-    end
-
-    avg_grid_mean = mean(grid_means)
-    avg_grid_std = mean(grid_stds)
-    avg_ev_mean = mean(ev_means)
-    avg_ev_std = mean(ev_stds)
-    avg_init_proj_mean = mean(init_proj_means)
-    avg_init_proj_std = mean(init_proj_stds)
-    avg_op_proj_mean = mean(op_proj_means)
-    avg_op_proj_std = mean(op_proj_stds)
-
-    println("Grid Cost Statistics (Average):")
-    println("μ: ", round(avg_grid_mean, digits=3))
-    println("σ: ", round(avg_grid_std, digits=3))
-
-    println("\nEV Cost Statistics (Average):")
-    println("μ (non-zero values): ", round(avg_ev_mean, digits=3))
-    println("σ (non-zero values): ", round(avg_ev_std, digits=3))
-
-    println("\nInitial Projection Cost Statistics (Average):")
-    println("μ: ", round(avg_init_proj_mean, digits=3))
-    println("σ: ", round(avg_init_proj_std, digits=3))
-    
-    println("\nOperational Projection Cost Statistics (Average):")
-    println("μ: ", round(avg_op_proj_mean, digits=3))
-    println("σ: ", round(avg_op_proj_std, digits=3))
-
-    return avg_grid_mean, avg_grid_std, avg_ev_mean, avg_ev_std, avg_init_proj_mean, avg_init_proj_std, avg_op_proj_mean, avg_op_proj_std
-end
-
-
 
 ####################################################################################################
 # Safety checks
@@ -512,7 +545,7 @@ function perform_safety_warnings(env::MCES_Env)
 end
 
 ####################################################################################################
-# Data from EMS Module to MCES Env
+# Data from EMS Module to MCES Env, for direct comparison with RL agent 
 function EMSDict_to_Replay(rhDict::Dict)
     required_fields = ["Pbess", "Pev[1]", "Phpe", "γf"]
     
@@ -543,6 +576,8 @@ function EMSDict_to_Replay(rhDict::Dict)
     )
 end
 
+#############################################
+# Save and Load functionality
 function save_MCES_Hook(filepath::String, hook::AbstractHook)
     jldsave(filepath, hook = hook)
 end
@@ -632,165 +667,8 @@ function load_hooks_folder(folder_path::String)
 end
 
 
-function find_differences(vec1::Vector, vec2::Vector)
-    length(vec1) != length(vec2) && error("Vectors have different lengths")
-    
-    for i in 1:length(vec1)
-        if vec1[i] != vec2[i]
-            println("Difference at index $i")
-        end
-    end
-    println("Reached the end of the vectors")
-end
-###################################################################################
-# To Clone Behaviour
-function get_actions(rhDict::Dict)
-    required_fields = ["Pbess", "Pev[1]", "Phpe", "γ_cont"]
-    
-    # Error Checking
-    for field in required_fields
-        if !haskey(rhDict, field)
-            error("Missing required field: $field")
-        end
-    end
-
-    Pbess = get(rhDict, "Pbess", Float32[])
-    Pev = get(rhDict, "Pev[1]", Float32[])
-    Phpe = get(rhDict, "Phpe", Float32[])
-    γ_cont = get(rhDict, "γ_cont", Float32[])
-    
-    if !isempty(γ_cont) && !isempty(Pev) && length(γ_cont) == length(Pev)
-        processed_Pev = γ_cont .* Pev
-    else
-        processed_Pev = Float32[]
-    end
-    
-    # Create a matrix with 3 rows
-    action_matrix = zeros(Float32, 3, length(Pbess))
-    action_matrix[1, :] = processed_Pev
-    action_matrix[2, :] = Pbess
-    action_matrix[3, :] = Phpe
-    
-    return action_matrix
-end
 
 
-function get_socs(rhDict::Dict)
-    # List of required fields
-    required_fields = ["SoCtess", "SoCbess", "SoCev[1]", "γ_cont"]
-    
-    # Error Checking
-    for field in required_fields
-        if !haskey(rhDict, field)
-            error("Missing required field: $field")
-        end
-    end
-
-    # Extract the relevant fields
-    SoCtess = get(rhDict, "SoCtess", Float32[])
-    SoCbess = get(rhDict, "SoCbess", Float32[])
-    SoCev = get(rhDict, "SoCev[1]", Float32[])
-    γ_cont = get(rhDict, "γ_cont", Float32[])
-
-    # Create a matrix with 4 rows, each representing one of the state variables
-    state_matrix = zeros(Float32, 4, length(SoCtess))
-    state_matrix[1, :] = SoCtess
-    state_matrix[2, :] = SoCbess
-    state_matrix[3, :] = SoCev
-    state_matrix[4, :] = γ_cont
-    
-    return state_matrix
-end
-
-function get_exog_normalized(exog::Exogenous_BatchCollection)
-    load_e_normalized = z_score(exog.load_e, 0.342, 0.203)
-    load_th_normalized = z_score(exog.load_th, 0.655, 0.405)
-    pv_normalized = z_score(exog.pv, 0.528, 0.873)
-    λ_buy_normalized = z_score(exog.λ_buy, 0.242, 0.128)
-    λ_sell_normalized = z_score(exog.λ_sell, 0.231, 0.121)
-
-    normalized_matrix = zeros(Float32, 5, length(exog.load_e))
-    normalized_matrix[1, :] = load_e_normalized
-    normalized_matrix[2, :] = load_th_normalized
-    normalized_matrix[3, :] = pv_normalized
-    normalized_matrix[4, :] = λ_buy_normalized
-    normalized_matrix[5, :] = λ_sell_normalized
-
-    return normalized_matrix
-end
-
-function get_t_ep(ep_length::Int, episodes::Int)
-    ep = [i/ep_length for i in 1:ep_length]
-    Float32.(repeat(ep, episodes))
-end
-
-function get_t_year(length::Int)
-    ep = [i/35040 for i in 1:length]
-    Float32.(ep)
-end
-
-function get_full_state(exog::Exogenous_BatchCollection, rhDict::Dict, ep_length::Int)
-    # Extract SoCs and γ_cont
-    socs_matrix = get_socs(rhDict)
-    max_step = length(socs_matrix[1,:])   # The rhDict is the limiting factor
-
-    # Extract and normalize exogenous values
-    normalized_exog = get_exog_normalized(exog)[:, 1:max_step]
-    
-    # Calculate t_ep_ratio and t_year_ratio
-    episodes = div(max_step, ep_length)
-    t_ep_ratio = get_t_ep(ep_length, episodes)
-    # t_year_ratio = get_t_year(max_step)
-    
-    # Combine all into an 11-row matrix
-    full_state_matrix = vcat(
-        normalized_exog, 
-        socs_matrix, 
-        reshape(t_ep_ratio, 1, :)
-    )
-    
-    return full_state_matrix
-end
-
-function save_clone_policy(filepath::String, policy)
-    jldsave(filepath, clone = policy)
-end
-
-function load_clone_policy(filepath::String)
-    JLD2.load(filepath, "clone")
-end
-
-function save_expert_data(filepath::String, actions, states, hook)
-    jldsave(filepath, actions = actions, states = states, rewards = hook) # Rewards can be found and weighted within the hook. 
-end
-
-function load_expert_data(filepath::String)
-    @load filepath actions states rewards 
-    println("Output is ordered -> actions, states, rewards")
-    actions, states, rewards
-end
-
-function double_backslashes(path::String)
-    # The string must have "raw" before, to be accepted by the function.
-    # Example -> raw"C:\Users\...\file.jld2"
-    return replace(path, "\\" => "\\")
-end
-
-
-function run_with_redirect(house, policy; exog, filename::String = "Ipopt_debug.txt")
-    debug_file = joinpath(@__DIR__, "debug", filename)
-    original_stdout = stdout
-
-    local h
-    open(debug_file, "w") do file
-        redirect_stdout(file)
-        h = run_dont_learn(house,policy; exog = exog)
-        flush(file)
-    end
-
-    redirect_stdout(original_stdout)
-    return h
-end
 
 #########################################################################################
 
