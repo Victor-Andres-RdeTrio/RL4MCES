@@ -1,9 +1,23 @@
-# Here will be placed all the modifications of imported code, all the new methods. 
-
 
 ##################################################################################
-# Modifying the run and _run functions
+# Modifying the run and _run functions from ReinforcementLearning.jl
 
+"""
+    run(policy::AbstractPolicy, env::MCES_Env, W::Exogenous, stop_condition=StopAfterEpisode(1), hook=VoidHook(), reset_condition=ResetAtTerminal())
+
+Run a reinforcement learning experiment with the given policy in the MCES environment. Modified from the ReinforcementLearning.jl package.
+
+# Arguments
+- `policy::AbstractPolicy`: The policy to use for decision making (i.e. the Agent).
+- `env::MCES_Env`: The MCES environment to run the experiment in.
+- `W::Exogenous`: The exogenous data necessary for transitioning to a new state in the simulation.
+- `stop_condition=StopAfterEpisode(1)`: Condition that determines when to stop the experiment.
+- `hook=VoidHook()`: Hook for gathering data during the experiment.
+- `reset_condition=ResetAtTerminal()`: Condition that determines when to reset the environment.
+
+# Returns
+- The result of calling the internal `_run` function.
+"""
 function Base.run(
     policy::AbstractPolicy,
     env::MCES_Env,
@@ -15,13 +29,43 @@ function Base.run(
     _run(policy, env, W, stop_condition, hook, reset_condition)
 end
 
+"""
+    _run(policy::AbstractPolicy, env::MCES_Env, W::Exogenous, stop_condition, hook, reset_condition)
 
+Internal implementation of the reinforcement learning experiment runner. Modified from the ReinforcementLearning.jl package.
+
+# Arguments
+- `policy::AbstractPolicy`: The policy to use for decision making.
+- `env::MCES_Env`: The MCES environment to run the experiment in.
+- `W::Exogenous`: The exogenous data necessary for transitioning to a new state.
+- `stop_condition`: Condition that determines when to stop the experiment.
+- `hook`: Hook for gathering data during the experiment.
+- `reset_condition`: Condition that determines when to reset the environment.
+
+# Returns
+- The hook object containing collected data during the experiment.
+
+# Details
+1. Initializes the experiment with policy and environment setup.
+2. Creates a safety model with a safety factor of 1.07.
+3. For each episode:
+   - Resets the environment.
+   - Runs policy and hook pre-episode callbacks.
+   - While the reset condition is not met:
+     - Executes the policy action sequence (learn the state of Env, then infer actions, then apply actions)
+     - Updates environment with exogenous data and transitions to new timestep (see `exogenous!`).
+     - Updates the state buffer and reward.
+     - Runs post-action callbacks.
+     - Checks for stop condition.
+   - If environment terminated, runs post-episode callbacks.
+4. Finalizes the experiment with post-experiment callbacks.
+"""
 function _run(policy::AbstractPolicy, env::MCES_Env, W::Exogenous, stop_condition, hook, reset_condition)
 
     hook(PreExperimentStage(), policy, env)
     policy(PreExperimentStage(), env)
     is_stop = false
-    create_safety_model!(env, sf = 1.05f0) # sf = Safety Factor. 
+    create_safety_model!(env, sf = 1.07f0) # sf = Safety Factor. 
 
     while !is_stop
         reset!(env)
@@ -62,11 +106,59 @@ function _run(policy::AbstractPolicy, env::MCES_Env, W::Exogenous, stop_conditio
 end
 
 #####################################################################################################
-# Run to get average reward
-function run_for_reward(house::MCES_Env, policy; exog::Exogenous_BatchCollection = exog_train_ex, years::Integer = 1, total_reward = false, 
+
+"""
+   run_for_reward(house::MCES_Env, policy; 
+                 exog::Exogenous_BatchCollection = exog_train_ex, 
+                 years::Integer = 1, 
+                 id = "", 
+                 patience = 150, 
+                 delta_size = 20, 
+                 min_δ::Union{Float32, Nothing} = nothing, 
+                 store_h::Union{Vector,Nothing} = nothing, 
+                 store_m::Union{Vector,Nothing} = nothing, 
+                 mem_safe = false, 
+                 exog_to_test::Exogenous_BatchCollection = exog_cv_91,
+                 projection_to_test::Bool = false, 
+                 n_test_seeds::Union{Integer,Nothing} = 1)
+
+Run a reinforcement learning training and evaluation process to obtain average reward.
+
+# Arguments
+- `house::MCES_Env`: The MCES environment to run the experiment in.
+- `policy`: The policy to use for decision making.
+- `exog::Exogenous_BatchCollection = exog_train_ex`: Exogenous data for training.
+- `years::Integer = 1`: Number of years to train.
+- `id = ""`: Identifier string for logging.
+- `patience = 150`: Patience parameter for early stopping.
+- `delta_size = 20`: Size parameter for early stopping evaluation.
+- `min_δ::Union{Float32, Nothing} = nothing`: Minimum delta for early stopping.
+- `store_h::Union{Vector,Nothing} = nothing`: Optional vector to store hooks.
+- `store_m::Union{Vector,Nothing} = nothing`: Optional vector to store policies.
+- `mem_safe = false`: Whether to operate in memory efficient mode.
+- `exog_to_test::Exogenous_BatchCollection = exog_cv_91`: Exogenous data for evaluation/testing.
+- `projection_to_test::Bool = false`: Whether to use safe projection during testing.
+- `n_test_seeds::Union{Integer,Nothing} = 1`: Number of test seeds for evaluation.
+
+# Returns
+- Average reward from evaluation phase or 0f0 if n_test_seeds is nothing.
+
+# Details
+1. Training phase:
+  - Sets up an agent with the provided policy.
+  - Trains for the specified number of years with the `exog` data provided.
+  - Uses early stopping logic based on patience, delta size, and min_δ parameters.
+  - Stores hooks and policies if requested and not in memory efficient mode.
+2. Evaluation phase (if n_test_seeds is not nothing):
+  - Optionally applies projection for testing when projection_to_test is true.
+  - Calls `run_dont_learn` function for evaluation.
+  - Uses the provided `exog_to_test` data (defaults to exog_cv_91) for validation of performance.
+"""
+function run_for_reward(house::MCES_Env, policy; exog::Exogenous_BatchCollection = exog_train_ex, years::Integer = 1, 
     id = "", patience = 150, delta_size = 20, min_δ::Union{Float32, Nothing} = nothing, 
     store_h::Union{Vector,Nothing} = nothing, store_m::Union{Vector,Nothing} = nothing, 
-    mem_safe = false, projection_to_test::Bool = false, n_test_seeds::Union{Integer,Nothing} = 1
+    mem_safe = false, exog_to_test::Exogenous_BatchCollection = exog_cv_91,
+    projection_to_test::Bool = false, n_test_seeds::Union{Integer,Nothing} = 1
     )
 
     hook = mem_safe ? VoidHook() : MCES_Hook()
@@ -103,369 +195,41 @@ function run_for_reward(house::MCES_Env, policy; exog::Exogenous_BatchCollection
     run_dont_learn( 
     house, 
     agent.policy, 
-    exog = deepcopy(exog_cv_91), 
+    exog = deepcopy(exog_to_test), 
     seeds = max(1, n_test_seeds), 
     mem_safe = true, # If mem_safe == true the output will be just the crossvalidation reward, if false it will be the crossvalidation hooks.
-    total_reward = total_reward
     )
-end
-
-function run_for_reward_alone(house::MCES_Env, policy; exog::Exogenous_BatchCollection = exog_train_ex, years::Int = 1, total_reward = false, 
-    id = "", patience = 150, delta_size = 20, min_δ::Union{Float32, Nothing} = nothing, 
-    store_h::Union{Vector,Nothing} = nothing, store_m::Union{Vector,Nothing} = nothing, mem_safe = false)
-
-    hook = mem_safe ? MCES_Moderate_Hook() : MCES_Hook()
-   
-    trajectory = Trajectory(container=Episode(ElasticArraySARTTraces(state=Float32 => (length(state(house)),), action=Float32 =>(3,))))
-    agent = Agent(policy, trajectory)
-    stop_condition = StopAfterEpisode_or_Early(episode = fld(exog.last_timestep, house.episode_length),
-    patience = patience, size = delta_size, min_δ = min_δ)
-    
-    for year in Base.OneTo(years)
-        stop_condition.cur = 0
-        exogenous_reset!(house)
-        run(agent, house, exog, stop_condition, hook)
-        if stop_condition.stop 
-            println(id, " Early Stop at $year/$years.")
-            break
-        end
-        println(id, " year: $year/$years.")
-        stop_condition.patience = 20
-    end
-    
-    if !mem_safe && store_h !== nothing
-        push!(store_h, hook)
-    end
-    store_m !== nothing && push!(store_m, agent.policy)    
-    # GC.gc()
-    
-    compute_reward(hook, total_reward, 7000, 1f0)
-end
-
-#####################################################################################################
-# VPG
-
-function run_vpg(;
-    threads::Bool = false, 
-    mem_safe::Bool = false,
-    seeds::Int = 1,
-    years::Int = 1,
-    exog = exog_train_ex,
-    total_reward::Bool = false,
-    p = MCES_Params(),
-    ep_l::Int = 96,
-    ns::Integer = 10,
-    na::Integer = 3,
-    disc_rate::Float32 = 0.99f0,
-    init_std::Float32 = 0.5f0,
-    adam_a::Float32 = 1f-4,
-    adam_c::Float32 = 1f-4,
-    actor_width::Integer = 64,
-    critic_width::Integer = 64,
-    actor_arch::Integer = 1,
-    critic_arch::Integer = 1,
-    f::Int = 4,
-    store_h::Union{Vector,Nothing} = nothing,
-    store_m::Union{Vector,Nothing} = nothing,
-    patience::Integer = 150,
-    delta_size::Integer = 20,
-    min_δ::Union{Float32, Nothing} = nothing
-    )
-
-    added_rwd = Atomic{Float32}(0)
-    if threads
-        @threads for i in Base.OneTo(seeds)
-            house = build_MCES(mem_safe = mem_safe, rng = Xoshiro(rand(1:1000)), params = p, episode_length = ep_l)
-            policy = myvpg_tune(
-                ns = ns, na = na, rng = Xoshiro(rand(1:1000)),
-                disc_rate = disc_rate, init_std = init_std, adam_a = adam_a, adam_c = adam_c,
-                actor_width = actor_width, critic_width = critic_width,
-                actor_arch = actor_arch, critic_arch = critic_arch,
-                ep_l = ep_l, f = f, mem_safe = mem_safe
-            )
-            rwd = run_for_reward(house, policy, exog = deepcopy(exog), years = years, total_reward = total_reward,
-                id = "Th: $(threadid()) -> Testing seed $i/$seeds.", store_h = store_h, store_m = store_m,
-                patience = patience, delta_size = delta_size, min_δ = min_δ, mem_safe = mem_safe)
-            atomic_add!(added_rwd, rwd)
-        end
-    else # No multithreading
-        for i in Base.OneTo(seeds)
-            house = build_MCES(mem_safe = mem_safe, rng = Xoshiro(rand(1:1000)), params = p, episode_length = ep_l)
-            policy = myvpg_tune(
-                ns = ns, na = na, rng = Xoshiro(rand(1:1000)),
-                disc_rate = disc_rate, init_std = init_std, adam_a = adam_a, adam_c = adam_c,
-                actor_width = actor_width, critic_width = critic_width,
-                actor_arch = actor_arch, critic_arch = critic_arch,
-                ep_l = ep_l, f = f, mem_safe = mem_safe
-            )
-            rwd = run_for_reward(house, policy, exog = exog, years = years, total_reward = total_reward,
-                id = "Th: $(threadid()) -> Testing seed $i/$seeds.", store_h = store_h, store_m = store_m,
-                patience = patience, delta_size = delta_size, min_δ = min_δ, mem_safe = mem_safe)
-            atomic_add!(added_rwd, rwd)
-        end
-    end
-    return round(added_rwd[]/seeds, digits = 4)
-end
-
-#####################################################################################################
-# A2CGAE
-
-function run_a2cgae(;
-    threads::Bool = false, 
-    mem_safe = false,
-    seeds::Int = 1,
-    years::Int = 1,
-    exog = exog_train_ex,
-    total_reward = false,
-    p = MCES_Params(),
-    ep_l = 96,
-    ns = 10,
-    na = 3,
-    disc_rate = 0.99f0,
-    gae = 0.9f0,
-    init_std = 0.5f0,
-    w_a = 1f0,
-    w_e = 0.5f0,
-    adam_a = 1f-4,
-    adam_c = 1f-4,
-    actor_width::Int = 64,
-    critic_width::Int = 64,
-    actor_arch::Int = 1,
-    critic_arch::Int = 1,
-    f = 2,
-    store_h = nothing,
-    store_m = nothing,
-    patience::Int = 150,
-    delta_size = 20,
-    min_δ = nothing
-    )
-
-    added_rwd = Atomic{Float32}(0)
-    if threads
-        @threads for i in Base.OneTo(seeds)
-            house = build_MCES(mem_safe = mem_safe, rng = Xoshiro(rand(1:1000)), params = p, episode_length = ep_l)
-            policy = a2cgae_tune(
-                ns = ns, na = na, rng = Xoshiro(rand(1:1000)),
-                disc_rate = disc_rate, gae = gae, init_std = init_std,
-                w_a = w_a, w_e = w_e, adam_a = adam_a, adam_c = adam_c,
-                actor_width = actor_width, critic_width = critic_width,
-                actor_arch = actor_arch, critic_arch = critic_arch, ep_l = ep_l, f = f
-            )
-            rwd = run_for_reward(house, policy, exog = deepcopy(exog), years = years, total_reward = total_reward,
-                id = "Th: $(threadid()) -> Testing seed $i/$seeds.", store_h = store_h, store_m = store_m,
-                patience = patience, delta_size = delta_size, min_δ = min_δ, mem_safe = mem_safe)
-            atomic_add!(added_rwd, rwd)
-        end
-    else # No multithreading
-        for i in Base.OneTo(seeds)
-            house = build_MCES(mem_safe = mem_safe, rng = Xoshiro(rand(1:1000)), params = p, episode_length = ep_l)
-            policy = a2cgae_tune(
-                ns = ns, na = na, rng = Xoshiro(rand(1:1000)),
-                disc_rate = disc_rate, gae = gae, init_std = init_std,
-                w_a = w_a, w_e = w_e, adam_a = adam_a, adam_c = adam_c,
-                actor_width = actor_width, critic_width = critic_width,
-                actor_arch = actor_arch, critic_arch = critic_arch, ep_l = ep_l, f = f
-            )
-            rwd = run_for_reward(house, policy, exog = exog, years = years, total_reward = total_reward,
-                id = "Th: $(threadid()) -> Testing seed $i/$seeds.", store_h = store_h, store_m = store_m,
-                patience = patience, delta_size = delta_size, min_δ = min_δ, mem_safe = mem_safe)
-            atomic_add!(added_rwd, rwd)
-        end
-    end
-    return round(added_rwd[]/seeds, digits = 4)
-end
-
-#####################################################################################################
-# PPO
-
-function run_ppo(;
-    threads::Bool = false, 
-    mem_safe::Bool = false,
-    seeds::Integer = 1,
-    years::Integer = 1,
-    exog = exog_train_ex,
-    reward_shape::Integer = 1,
-    total_reward = false,
-    p = MCES_Params(),
-    ep_l = 96,
-    # ns = 10,
-    na = 3,
-    disc_rate = 0.99f0,
-    gae = 0.9f0,
-    init_std = 0.5f0,
-    w_a = 1f0,
-    w_e = 0.5f0,
-    adam_a = 1f-4,
-    adam_c = 1f-4,
-    actor_width::Integer = 64,
-    critic_width::Integer = 64,
-    actor_arch::Integer = 1,
-    critic_arch::Integer = 1,
-    actor_activ::Integer = 1,
-    critic_activ::Integer = 1,
-    f = 3,
-    clip_coef::Float32 = 0.25f0,
-    store_h = nothing,
-    store_m = nothing,
-    store_mces = nothing,
-    patience::Int = 150,
-    delta_size = 20,
-    min_δ = nothing,
-    ev_in_EMS::Bool = true,
-    cum_cost_grid::Bool = false,
-    online_stats = OnlineNorm(14),
-    state_buffer_dict = Dict(),
-    projection_to_train::Bool = false,
-    projection_to_test::Bool = false,
-    n_test_seeds::Integer = 1
-    )
-
-    ev = ev_in_EMS ? EV() : nothing
-
-    ns = isempty(state_buffer_dict) ? 44 : count_features(state_buffer_dict)
-    
-    added_rwd = Atomic{Float32}(0)
-    if threads
-        @threads for i in 1:seeds
-            house = build_MCES(
-                mem_safe = mem_safe, rng = Xoshiro(rand(1:1000)), 
-                params = p, episode_length = ep_l, ev = ev, 
-                cum_cost_grid = cum_cost_grid, 
-                state_buffer_dict = state_buffer_dict,
-                reward_shape = reward_shape,
-                simple_projection = !projection_to_train
-                )
-            policy = ppo_tune(
-                ns = ns, na = na, rng = Xoshiro(rand(1:1000)),
-                disc_rate = disc_rate, gae = gae, init_std = init_std,
-                w_a = w_a, w_e = w_e, adam_a = adam_a, adam_c = adam_c,
-                actor_width = actor_width, critic_width = critic_width,
-                actor_arch = actor_arch, critic_arch = critic_arch, 
-                actor_activ = actor_activ, critic_activ = critic_activ,
-                ep_l = ep_l, f = f, clip_coef = clip_coef, mem_safe = mem_safe,
-                online_stats = deepcopy(online_stats),
-            )
-            rwd = run_for_reward(
-                house, policy, exog = deepcopy(exog), years = years, 
-                total_reward = total_reward, id = "Th: $(threadid()) -> Testing seed $i/$seeds.", 
-                store_h = store_h, store_m = store_m,
-                patience = patience, delta_size = delta_size, min_δ = min_δ, 
-                mem_safe = mem_safe, projection_to_test = projection_to_test,
-                n_test_seeds = n_test_seeds)
-            atomic_add!(added_rwd, rwd)
-            
-            if !isnothing(store_mces) && !mem_safe
-                try 
-                    store_mces[i] = house
-                catch e
-                    println("Could not store the MCES. 
-                    Error -> $e"
-                    )
-                end
-            end
-        end
-    else
-        for i in 1:seeds
-            house = build_MCES(
-                mem_safe = mem_safe, rng = Xoshiro(rand(1:1000)), 
-                params = p, episode_length = ep_l, ev = ev, 
-                cum_cost_grid = cum_cost_grid,
-                state_buffer_dict = state_buffer_dict,
-                reward_shape = reward_shape,
-                simple_projection = !projection_to_train
-                )
-            policy = ppo_tune(
-                ns = ns, na = na, rng = Xoshiro(rand(1:1000)),
-                disc_rate = disc_rate, gae = gae, init_std = init_std,
-                w_a = w_a, w_e = w_e, adam_a = adam_a, adam_c = adam_c,
-                actor_width = actor_width, critic_width = critic_width,
-                actor_arch = actor_arch, critic_arch = critic_arch,
-                actor_activ = actor_activ, critic_activ = critic_activ,
-                ep_l = ep_l, f = f, clip_coef = clip_coef, mem_safe = mem_safe,
-                online_stats = deepcopy(online_stats),
-            )
-            rwd = run_for_reward(
-                house, policy, exog = deepcopy(exog), years = years, 
-                total_reward = total_reward, id = "Th: $(threadid()) -> Testing seed $i/$seeds.", 
-                store_h = store_h, store_m = store_m,
-                patience = patience, delta_size = delta_size, min_δ = min_δ, 
-                mem_safe = mem_safe, projection_to_test = projection_to_test,
-                n_test_seeds = n_test_seeds)
-            atomic_add!(added_rwd, rwd)
-        end
-    end
-    return round(added_rwd[]/seeds, digits = 4)
-end
-
-function run_ppo_noCV(;
-    threads::Bool = false, mem_safe = false,
-    seeds::Int = 1,
-    years::Int = 1,
-    exog = exog_train_ex,
-    total_reward = false,
-    p = MCES_Params(),
-    ep_l = 96,
-    ns = 10,
-    na = 3,
-    disc_rate = 0.99f0,
-    gae = 0.9f0,
-    std_min = 1f-3,
-    w_a = 1f0,
-    w_e = 0.5f0,
-    adam = 3e-4,
-    actor_width::Int = 64,
-    critic_width::Int = 64,
-    actor_arch::Int = 1,
-    critic_arch::Int = 1,
-    f = 3,
-    clip_coef::Float32 = 0.25f0,
-    store_h = nothing,
-    store_m = nothing,
-    patience::Int = 150,
-    delta_size = 20,
-    min_δ = nothing
-    )
-
-    added_rwd = Atomic{Float32}(0)
-    if threads
-        @threads for i in 1:seeds
-            house = build_MCES(mem_safe = mem_safe, rng = Xoshiro(rand(1:1000)), params = p, episode_length = ep_l)
-            policy = ppo_tune(
-                ns = ns, na = na, rng = Xoshiro(rand(1:1000)),
-                disc_rate = disc_rate, gae = gae, std_min = std_min,
-                w_a = w_a, w_e = w_e, adam = adam,
-                actor_width = actor_width, critic_width = critic_width,
-                actor_arch = actor_arch, critic_arch = critic_arch,
-                ep_l = ep_l, f = f, clip_coef = clip_coef, mem_safe = mem_safe
-            )
-            rwd = run_for_reward_alone(house, policy, exog = exog, years = years, total_reward = total_reward,
-                id = "Th: $(threadid()) -> Testing seed $i/$seeds.", store_h = store_h, store_m = store_m,
-                patience = patience, delta_size = delta_size, min_δ = min_δ, mem_safe = mem_safe)
-            atomic_add!(added_rwd, rwd)
-        end
-    else
-        for i in 1:seeds
-            house = build_MCES(mem_safe = mem_safe, rng = Xoshiro(rand(1:1000)), params = p, episode_length = ep_l)
-            policy = ppo_tune(
-                ns = ns, na = na, rng = Xoshiro(rand(1:1000)),
-                disc_rate = disc_rate, gae = gae, std_min = std_min,
-                w_a = w_a, w_e = w_e, adam = adam,
-                actor_width = actor_width, critic_width = critic_width,
-                actor_arch = actor_arch, critic_arch = critic_arch,
-                ep_l = ep_l, f = f, clip_coef = clip_coef, mem_safe = mem_safe
-            )
-            rwd = run_for_reward_alone(house, policy, exog = exog, years = years, total_reward = total_reward,
-                id = "Th: $(threadid()) -> Testing seed $i/$seeds.", store_h = store_h, store_m = store_m,
-                patience = patience, delta_size = delta_size, min_δ = min_δ, mem_safe = mem_safe)
-            atomic_add!(added_rwd, rwd)
-        end
-    end
-    return round(added_rwd[]/seeds, digits = 4)
 end
 
 
 #################################################################################################################
 # Running without Learning
+
+"""
+    run_free(policy::AbstractPolicy, env::MCES_Env, W::Exogenous, stop_condition, hook, reset_condition = ResetAtTerminal())
+
+Run a reinforcement learning experiment without learning (evaluation only).
+
+# Arguments
+- `policy::AbstractPolicy`: The policy to use for decision making.
+- `env::MCES_Env`: The MCES environment to run the experiment in.
+- `W::Exogenous`: The exogenous data necessary for transitioning to a new state.
+- `stop_condition`: Condition that determines when to stop the experiment.
+- `hook`: Hook for gathering data during the experiment.
+- `reset_condition = ResetAtTerminal()`: Condition that determines when to reset the environment.
+
+# Returns
+- The hook object containing collected data during the experiment.
+
+# Details
+This function is similar to `_run` but designed for evaluation without learning:
+1. Initializes the experiment with policy and environment setup.
+2. Creates a safety model with a safety factor of 1.07.
+3. For each episode:
+   - Similar execution to `_run` but with training=false for state buffer updates.
+   - Specifically skips learning in the post-episode stage by passing a String ("Dont Learn").
+4. Finalizes the experiment with post-experiment callbacks.
+"""
 function run_free(policy::AbstractPolicy, env::MCES_Env, W::Exogenous, stop_condition, hook, reset_condition = ResetAtTerminal())
 
     hook(PreExperimentStage(), policy, env)
@@ -510,10 +274,41 @@ function run_free(policy::AbstractPolicy, env::MCES_Env, W::Exogenous, stop_cond
     hook
 end
 
+"""
+    run_dont_learn(house::MCES_Env, policy; 
+                  exog::Exogenous_BatchCollection = exog_train_ex, 
+                  seeds::Integer = 1, 
+                  mem_safe = false,
+                  rng::Union{AbstractRNG,Nothing} = nothing)
 
+Run an evaluation of a policy without learning, potentially with multiple seeds.
+
+# Arguments
+- `house::MCES_Env`: The MCES environment to evaluate in.
+- `policy`: The policy to evaluate.
+- `exog::Exogenous_BatchCollection = exog_train_ex`: Exogenous data for evaluation.
+- `seeds::Integer = 1`: Number of evaluation seeds/runs.
+- `mem_safe = false`: Whether to operate in memory efficient mode.
+- `rng::Union{AbstractRNG,Nothing} = nothing`: Optional random number generator.
+
+# Returns
+- If mem_safe is true: Mean performance across all seeds.
+- If mem_safe is false: Vector of hooks, or single hook if seeds=1.
+
+# Details
+1. Prepares storage for evaluation results.
+2. For each seed:
+   - Creates a new hook.
+   - Resets the environment.
+   - Sets the RNG for supported policy types (A2CGAE, PPO, myVPG).
+   - Sets up an agent and stop condition.
+   - Calls `run_free` for evaluation.
+   - Stores either performance metrics or hooks based on mem_safe setting.
+3. Returns the appropriate result structure.
+"""
 function run_dont_learn(house::MCES_Env, policy; 
     exog::Exogenous_BatchCollection = exog_train_ex, 
-    seeds::Integer = 1, mem_safe = false, total_reward = false,
+    seeds::Integer = 1, mem_safe = false,
     rng::Union{AbstractRNG,Nothing} = nothing)
 
     store = Vector{Any}(undef, seeds)
@@ -551,25 +346,6 @@ function run_dont_learn(house::MCES_Env, policy;
 end
 
 
-
-function run_dont_learn_policies(house::MCES_Env, policies::Vector; 
-    exog::Exogenous_BatchCollection = exog_train_ex, 
-    years::Int64 = 1, seeds::Int64 = 1)
-
-    all_hooks = []
-
-    for policy in policies
-        hooks = run_dont_learn_seeds(house, policy; exog=exog, seeds=seeds)
-        if isa(hooks, Vector)
-            push!(all_hooks, hooks...)
-        else
-            push!(all_hooks, hooks) 
-        end
-    end
-
-    return all_hooks
-end
-
 """
     run_with_redirect(house, policy; exog, filename::String = "debug.txt")
 
@@ -603,24 +379,6 @@ function run_with_redirect(house, policy; exog, filename::String = "debug.txt")
     redirect_stdout(original_stdout)
     return h
 end
-
-
-#########################################################################################
-# To run EMS Module Transition Function
-
-function run_TransitionEnv!(house::MCES_Env, policy; 
-    exog::Exogenous_BatchCollection)::MCES_Hook
-
-    hook = MCES_Hook()
-    trajectory = Trajectory(container=Episode(ElasticArraySARTTraces(state=Float32 => (length(state(house)),), action=Float32 =>(3,))))
-    agent = Agent(policy, trajectory)
-    stop_condition = StopAfterEpisode(1)
-    exogenous_reset!(house)
-    run_free(agent, house, exog, stop_condition, hook)
-    
-    hook
-end
-
 
 
 @info "Changing ways to run"

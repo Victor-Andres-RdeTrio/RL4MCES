@@ -187,8 +187,8 @@ end
         policy_type::String = "PPO", 
         threads::Bool = false, mem_safe::Bool = false,
         seeds::Integer = 1, years::Integer = 1,
-        exog = exog_train_ex, reward_shape::Integer = 1,
-        total_reward = false, p = MCES_Params(), ep_l = 96,
+        exog = exog_train_ex, reward_shape::Integer = 1, 
+        p = MCES_Params(), ep_l = 96,
         na = 3, disc_rate = 0.99f0, gae = 0.9f0,
         init_std = 0.5f0, w_a = 1f0, w_e = 0.0f0,
         adam_a = 1f-4, adam_c = 1f-4,
@@ -200,7 +200,7 @@ end
         patience::Int = 150, delta_size = 20,
         min_δ = nothing, ev_in_EMS::Bool = true,
         cum_cost_grid::Bool = false, online_stats = OnlineNorm(14),
-        state_buffer_dict = Dict(),
+        state_buffer_dict = Dict(), exog_to_test = exog_cv_91,
         projection_to_train::Bool = false, projection_to_test::Bool = false,
         n_test_seeds::Union{Integer,Nothing} = 1
     )
@@ -215,7 +215,6 @@ Trains a new reinforcement learning Agent for controlling an MCES environment.
 - `years::Integer`: Number of simulated years to train for. The yearly data is simply repeated (essentially an epoch)(default: 1).
 - `exog`: Exogenous variable data for training (default: exog_train_ex).
 - `reward_shape::Integer`: Type of reward shaping to use (default: 1).
-- `total_reward`: Whether to use total reward instead of shaped reward (default: false).
 - `p`: MCES parameters (default: MCES_Params()).
 - `ep_l`: Episode length (default: 96).
 - `na`: Number of actions decided by the Agent (default: 3).
@@ -245,6 +244,7 @@ Trains a new reinforcement learning Agent for controlling an MCES environment.
 - `cum_cost_grid::Bool`: Whether to use cumulative cost grid for rewards (default: false).
 - `online_stats`: Online normalization for state features (default: OnlineNorm(14)).
 - `state_buffer_dict`: Dictionary defining state buffer configuration (default: Dict()).
+- `exog_to_test`: Exogenous data for evaluation/testing (default: exog_cv_91).
 - `projection_to_train::Bool`: Whether to use safety projection during training (default: false). Selecting true will incur considerable computational cost, as every decision made will be projected.
 - `projection_to_test::Bool`: Whether to use safety projection during testing (default: false). Select true for final validation tests, as this represents the real world conditions of operation (when safety is a top priority).
 - `n_test_seeds::Union{Integer,Nothing}`: Number of test seeds to evaluate with (default: 1).
@@ -281,7 +281,6 @@ function train_new_policy(;
     years::Integer = 1,
     exog = exog_train_ex,
     reward_shape::Integer = 1,
-    total_reward = false,
     p = MCES_Params(),
     ep_l = 96,
     na = 3, # number of actions
@@ -311,6 +310,7 @@ function train_new_policy(;
     cum_cost_grid::Bool = false,
     online_stats = OnlineNorm(14),
     state_buffer_dict = Dict(),
+    exog_to_test = exog_cv_91,
     projection_to_train::Bool = false,
     projection_to_test::Bool = false,
     n_test_seeds::Union{Integer,Nothing} = 1
@@ -343,11 +343,11 @@ function train_new_policy(;
             )
             rwd = run_for_reward(
                 house, policy, exog = deepcopy(exog), years = years, 
-                total_reward = total_reward, id = "Th: $(threadid()) -> Testing seed $i/$seeds.", 
+                id = "Th: $(threadid()) -> Testing seed $i/$seeds.", 
                 store_h = store_h, store_m = store_m,
                 patience = patience, delta_size = delta_size, min_δ = min_δ, 
                 mem_safe = mem_safe, projection_to_test = projection_to_test,
-                n_test_seeds = n_test_seeds
+                n_test_seeds = n_test_seeds, exog_to_test = exog_to_test
                 )
             atomic_add!(added_rwd, rwd)
             
@@ -383,11 +383,11 @@ function train_new_policy(;
             )
             rwd = run_for_reward(
                 house, policy, exog = deepcopy(exog), years = years, 
-                total_reward = total_reward, id = "Th: $(threadid()) -> Testing seed $i/$seeds.", 
+                id = "Th: $(threadid()) -> Testing seed $i/$seeds.", 
                 store_h = store_h, store_m = store_m,
                 patience = patience, delta_size = delta_size, min_δ = min_δ, 
                 mem_safe = mem_safe, projection_to_test = projection_to_test,
-                n_test_seeds = n_test_seeds
+                n_test_seeds = n_test_seeds, exog_to_test = exog_to_test
                 )
             atomic_add!(added_rwd, rwd)
         end
@@ -430,8 +430,10 @@ Performs hyperparameter optimization for reinforcement learning policies trained
 - The function supports exploration of up to 18 different hyperparameters simultaneously.
 - Default parameter ranges are provided if not specified in the input dictionary.
 - Policy evaluation includes safety projection during testing but not during training.
+- If "adam_critic" => [nothing] ; the learning rate of the Critic will be the same as that of the Actor. 
 - The objective function is the negative of the reward (multiplied by 100) to convert the maximization problem to a minimization problem.
 - Results are saved in the parent directory.
+- For performing new tests, the user should modify directly the `train_new_policy` call, as there are various relevant arguments not captured within the `threaded_hyperopt` call. 
 
 # Example parameter ranges
 ```julia
@@ -494,10 +496,13 @@ function threaded_hyperopt(
 
     if policy_type in ["A2C", "VPG"] 
         clip_coef_range = [0f0]
+        # This parameter would have been ignored anyways, but by making it zero the irrelevant parameters 
+        # in the results are made obvious. By making it one value, the sampler knows will essentially ignore it, 
+        # as it becomes a constant in its search for the optimal hyperparameter configuration.
     end
 
     if policy_type == "VPG"
-        gae_parameter_range = [0f0]
+        gae_parameter_range = [0f0] 
         w_entropy_loss_range = [0f0]
     end
 
@@ -530,7 +535,6 @@ function threaded_hyperopt(
             mem_safe = true,
             seeds = seeds_per_sample, 
             years = years, 
-            total_reward = false, 
             p = what_parameters(params), 
             disc_rate = disc_rate, gae = gae, 
             init_std = init_std,
@@ -553,6 +557,7 @@ function threaded_hyperopt(
             cum_cost_grid = false,
             min_δ = nothing,
             projection_to_train = false, # It is highly recommended to keep this Boolean false, otherwise computational cost increases considerably. 
+            exog_to_test = exog_cv_91,
             projection_to_test = true,
             n_test_seeds = 1 # Once the agent is trained, this value defines how many test runs are averaged to get the estimate for the agent's performance.
         )

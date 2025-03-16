@@ -38,7 +38,6 @@ import StatsPlots # Needed for the boxplot
 using StatsBase: crosscor, crosscov, StatsBase, sample
 using Smoothing
 using Test
-import UnicodePlots
 using Zygote: @showgrad, Buffer
 
 

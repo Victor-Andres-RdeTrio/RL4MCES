@@ -1,20 +1,23 @@
-# Print in the REPL
 
-
-function print_hook_REPL(hook::Union{MCES_Hook, MCES_Moderate_Hook})
-    println(
-            UnicodePlots.lineplot(
-                hook.episode_rewards,
-                title="Total reward per episode",
-                xlabel="Episode",
-                ylabel="Rewards"))
-end
-
-###########################################################################
 # General Utility Plots
 Plots.theme(:dao)
 #other options are here https://docs.juliaplots.org/latest/generated/plotthemes/#:dao
 
+"""
+    plot_basic(a::Vector, start = 1, finish = length(a); smooth::Int = 0, label = "")
+
+Creates a basic line plot of a vector with optional smoothing.
+
+# Arguments
+- `a::Vector`: Vector to plot.
+- `start`: Starting index for plotting (default: 1).
+- `finish`: Ending index for plotting (default: length of the vector).
+- `smooth::Int`: Level of binomial smoothing to apply (default: 0).
+- `label`: Label for the plot legend (default: "").
+
+# Returns
+- The generated plot.
+"""
 function plot_basic(a::Vector, start = 1, finish = length(a); smooth::Int = 0, label = "")
     b = Smoothing.binomial(a, smooth)
     plot(start:finish, b[start:finish], label = label, linewidth = 2, dpi = 600)
@@ -46,6 +49,23 @@ function batches_to_ep(value_per_batch::Vector, batches_per_episode = 1) :: Abst
     sum(loss_mat, dims = 2)
 end
 
+"""
+    plot_dict(dict::Dict, keys::Vector{String}; start = 1, finish = length(dict[keys[1]]), 
+        smooth::Int = 0, layout = (2, round(Int, length(keys)/2, RoundUp)))
+
+Plots multiple time series from a dictionary.
+
+# Arguments
+- `dict::Dict`: Dictionary containing time series data.
+- `keys::Vector{String}`: Keys to plot from the dictionary.
+- `start`: Starting index for plotting (default: 1).
+- `finish`: Ending index for plotting (default: length of the first time series).
+- `smooth::Int`: Level of binomial smoothing to apply (default: 0).
+- `layout`: Plot layout as (rows, columns) (default: 2 rows with calculated columns).
+
+# Returns
+- Displays the resulting plot.
+"""
 function plot_dict(dict::Dict, keys::Vector{String}; start = 1, finish = length(dict[keys[1]]), 
     smooth::Int = 0, layout = (2, round(Int, length(keys)/2, RoundUp)))
 
@@ -62,24 +82,20 @@ function plot_dict(dict::Dict, keys::Vector{String}; start = 1, finish = length(
     display(p)
 end
 
-function plot_hooks(array; funct = plot_reward, subs = 6, kwargs...)
-    plots = []
-
-    for (i, hook) in enumerate(array)
-        p = funct(hook; kwargs...)
-        plot!(p, linewidth = 2, dpi = 800, title = "Seed: $i", label = "",
-        titlefont = font(12), guidefont = font(10), tickfont = font(8))
-        push!(plots, p)
-        i >= subs && break
-    end
-
-    columns = cld(length(plots), 2)
-    plot(plots..., layout = (2, columns), size = (300 * columns, 800))
-end
-
 ##############################################################
 # Statistic Plots
 
+"""
+    cdf_plot(data::Vector)
+
+Creates an empirical cumulative distribution function plot.
+
+# Arguments
+- `data::Vector`: Data vector to analyze.
+
+# Returns
+- Plot of the empirical CDF.
+"""
 function cdf_plot(data::Vector)
     
     ecdf_prob = ecdf(data)
@@ -89,6 +105,28 @@ function cdf_plot(data::Vector)
     p = plot(x, ecdf_prob.(x), title="Empirical Cumulative Distribution Function", xlabel="Value", ylabel="CDF")
 end
 
+"""
+    plot_boxplots(data_arrays::Vector{Vector{T}}; labels = nothing, colors = [:green, :violetred, :blue, :orange, :red, :teal],
+        title = "Multiple Dataset Comparison", size = (1300, 600), xlim = nothing, ylim = nothing, 
+        save_path = "", threshold = 0.0, alpha = 0.65) where {T}
+
+Creates boxplots for multiple datasets with optional filtering by threshold.
+
+# Arguments
+- `data_arrays::Vector{Vector{T}}`: Vector of data arrays to plot.
+- `labels`: Labels for each dataset (default: automatically generated).
+- `colors`: Colors for each boxplot (default: predefined color scheme).
+- `title`: Plot title (default: "Multiple Dataset Comparison").
+- `size`: Plot dimensions (default: (1300, 600)).
+- `xlim`: Optional x-axis limits for second plot.
+- `ylim`: Optional y-axis limits for second plot.
+- `save_path`: Path to save the plot (default: don't save).
+- `threshold`: Minimum value threshold for filtering data (default: 0.0).
+- `alpha`: Fill transparency (default: 0.65).
+
+# Returns
+- The generated plot.
+"""
 function plot_boxplots(
     data_arrays::Vector{Vector{T}}; 
     labels::Union{Vector{String}, Nothing} = nothing,
@@ -175,7 +213,20 @@ function plot_boxplots(
     return final_plot
 end
 
+"""
+    plot_boxplots(data_dict::Dict; colors = [:green, :violetred, :blue, :orange, :red, :teal],
+        title = "Multiple Dataset Comparison", size = (1300, 600), 
+        xlim = nothing, ylim = nothing, save_path = "", threshold = 0.0)
 
+Creates boxplots from a dictionary where keys are used as labels.
+
+# Arguments
+- `data_dict::Dict`: Dictionary mapping parameters to data arrays.
+- Other parameters: Same as the vector version of plot_boxplots.
+
+# Returns
+- The generated plot with dictionary keys as labels (dispatches to a different version of `plot_boxplots`).
+"""
 function plot_boxplots(
     data_dict::Dict;
     colors=[:green, :violetred, :blue, :orange, :red, :teal],
@@ -205,6 +256,18 @@ function plot_boxplots(
     )
 end
 
+"""
+    plot_hyperopt_boxplots(hyperopt::Union{Hyperoptimizer, Vector{<:Hyperoptimizer}};
+        save_dir::String, correct::Bool = false, plot_kwargs...)
+
+Creates and saves boxplots for each parameter in a hyperoptimizer.
+
+# Arguments
+- `hyperopt`: Single hyperoptimizer or vector of hyperoptimizers.
+- `save_dir`: Directory to save the generated plots.
+- `correct`: Whether to apply correction (default: false).
+- `plot_kwargs...`: Additional arguments passed to plot_boxplots.
+"""
 function plot_hyperopt_boxplots(
     hyperopt::Union{Hyperoptimizer, Vector{<:Hyperoptimizer}};
     save_dir::String,
@@ -230,6 +293,24 @@ function plot_hyperopt_boxplots(
     end
 end
 
+"""
+    log_boxplots(data_arrays::Vector{Vector{T}}; labels = nothing, 
+        colors = [:green, :violetred, :blue, :lawngreen, :red, :purple],
+        title = "Multiple Dataset Comparison", size = (800, 600), save_path = "") where {T}
+
+Creates boxplots with logarithmic y-scale.
+
+# Arguments
+- `data_arrays::Vector{Vector{T}}`: Vector of data arrays to plot.
+- `labels`: Labels for each dataset (default: automatically generated).
+- `colors`: Colors for each boxplot (default: predefined color scheme).
+- `title`: Plot title (default: "Multiple Dataset Comparison").
+- `size`: Plot dimensions (default: (800, 600)).
+- `save_path`: Path to save the plot (default: don't save).
+
+# Returns
+- The generated plot with logarithmic y-scale.
+"""
 function log_boxplots(
     data_arrays::Vector{Vector{T}};
     labels::Union{Vector{String}, Nothing} = nothing,
@@ -292,7 +373,26 @@ function log_boxplots(
     return p
 end
 
+"""
+    plot_gamma_binomial(data_arrays::Vector, x_eval, h::Real; 
+        threshold::Real = 0.05, n_bootstrap::Int = 100,
+        colors = [:violetred, :blue, :green, :orange, :purple],
+        title = "Multiple Dataset Comparison")
 
+Creates a combined plot with KDE and binomial approximations.
+
+# Arguments
+- `data_arrays::Vector`: Vector of data arrays to analyze.
+- `x_eval`: Points at which to evaluate the KDE.
+- `h::Real`: Bandwidth parameter for KDE.
+- `threshold`: Minimum value threshold for filtering data (default: 0.05).
+- `n_bootstrap`: Number of bootstrap samples (default: 100).
+- `colors`: Colors for plotting (default: predefined color scheme).
+- `title`: Plot title (default: "Multiple Dataset Comparison").
+
+# Returns
+- Combined plot with KDE and binomial approximations.
+"""
 function plot_gamma_binomial( # Get labels for each dataset. 
     data_arrays::Vector, 
     x_eval, 
@@ -362,6 +462,31 @@ function plot_gamma_binomial( # Get labels for each dataset.
     return p
 end
 
+"""
+    plot_gamma_kde(data_arrays::Vector{Vector{T}}, x_eval, h::Real = 0.05;
+        labels = nothing, threshold::Real = 0.05, n_bootstrap::Integer = 100,
+        colors = [:green, :violetred, :blue, :orange, :purple],
+        title = "Multiple Dataset Comparison", xlims = nothing, ylims = nothing,
+        quartiles::Bool = true) where {T}
+
+Creates KDE plots for multiple datasets with optional quartile lines.
+
+# Arguments
+- `data_arrays::Vector{Vector{T}}`: Vector of data arrays to analyze.
+- `x_eval`: Points at which to evaluate the KDE.
+- `h::Real`: Bandwidth parameter for KDE (default: 0.05).
+- `labels`: Labels for each dataset (default: automatically generated).
+- `threshold`: Minimum value threshold for filtering data (default: 0.05).
+- `n_bootstrap`: Number of bootstrap samples (default: 100).
+- `colors`: Colors for plotting (default: predefined color scheme).
+- `title`: Plot title (default: "Multiple Dataset Comparison").
+- `xlims`: Optional x-axis limits for the zoomed plot.
+- `ylims`: Optional y-axis limits for the zoomed plot.
+- `quartiles`: Whether to show quartile lines (default: true).
+
+# Returns
+- Two-panel plot showing KDEs with both full view and zoomed view.
+"""
 function plot_gamma_kde(
     data_arrays::Vector{Vector{T}}, 
     x_eval, 
@@ -476,6 +601,23 @@ end
 ##########################################################################
 # Plotting Rewards
 
+"""
+    plot_reward(hook::Union{MCES_Hook,MCES_Moderate_Hook}; smooth::Int = 0)
+
+Plots episode rewards from a hook object with optional smoothing.
+
+# Arguments
+- `hook`: Hook object containing episode rewards.
+- `smooth::Int`: Level of binomial smoothing to apply (default: 0).
+
+# Returns
+- The generated plot showing accumulated rewards per episode.
+
+# Details
+- Creates a line plot with episodes on x-axis and rewards on y-axis.
+- Adds a horizontal line at zero for reference.
+- Displays and returns the plot.
+"""
 function plot_reward(hook::Union{MCES_Hook,MCES_Moderate_Hook}; smooth::Int = 0)
     episodes = 1:length(hook.episode_rewards)
     smooth_rwds = Smoothing.binomial(hook.episode_rewards, smooth)
@@ -493,6 +635,28 @@ function plot_reward(hook::Union{MCES_Hook,MCES_Moderate_Hook}; smooth::Int = 0)
     p
 end
 
+"""
+    plot_reward(hook1::Union{MCES_Hook,MCES_Moderate_Hook}, 
+                hook2::Union{MCES_Hook,MCES_Moderate_Hook}; 
+                smooth::Int = 0, 
+                label1::String = "Hook 1", 
+                label2::String = "Hook 2")
+
+Plots episode rewards from two hook objects for comparison.
+
+# Arguments
+- `hook1`, `hook2`: Hook objects containing episode rewards.
+- `smooth::Int`: Level of binomial smoothing to apply (default: 0).
+- `label1`, `label2`: Labels for the two data series (defaults: "Hook 1", "Hook 2").
+
+# Returns
+- The generated comparison plot.
+
+# Details
+- Creates a combined plot with both reward trajectories.
+- Adds a horizontal line at zero for reference.
+- Displays legend in bottom right corner.
+"""
 function plot_reward(hook1::Union{MCES_Hook,MCES_Moderate_Hook}, 
                      hook2::Union{MCES_Hook,MCES_Moderate_Hook}; 
                      smooth::Int = 0, 
@@ -524,7 +688,25 @@ function plot_reward(hook1::Union{MCES_Hook,MCES_Moderate_Hook},
     p
 end
 
+"""
+    plot_reward_dissect(hook::MCES_Hook; save_path = "", 
+                        params::Union{MCES_Params, Nothing} = nothing)
 
+Creates a two-panel plot showing reward components and total rewards.
+
+# Arguments
+- `hook`: Hook object containing reward dissection data.
+- `save_path`: Optional path to save the plot.
+- `params`: Optional MCES parameter object for weights information.
+
+# Returns
+- A two-panel plot with reward components and totals.
+
+# Details
+- Left panel shows weighted components: Grid, EV, Initial Projection, and Operational Projection.
+- Right panel shows weighted/clamped reward vs. unweighted reward.
+- Uses specific colors for different components.
+"""
 function plot_reward_dissect(hook::MCES_Hook; save_path = "", 
     params::Union{MCES_Params, Nothing} = nothing)
     dissection = hook.reward_dissect
@@ -569,7 +751,21 @@ function plot_reward_dissect(hook::MCES_Hook; save_path = "",
     display(plot_combined)
 end
 
+"""
+    plot_avg_loss(hook::MCES_Hook, batches_per_episode::Int = 1; 
+                 smooth::Int = 0, raw = false)
 
+Plots average loss values from a hook object.
+
+# Arguments
+- `hook`: Hook object containing loss data.
+- `batches_per_episode::Int`: Number of batches per episode (default: 1).
+- `smooth::Int`: Level of binomial smoothing to apply (default: 0).
+- `raw`: Whether to use raw average loss values (default: false).
+
+# Returns
+- Plot of average loss over optimization steps.
+"""
 function plot_avg_loss(hook::MCES_Hook, batches_per_episode::Int = 1; smooth::Int = 0, raw = false)
     loss_per_batch = raw ? hook.debug["raw_avg_loss"] : hook.debug["avg_loss"]
     loss_per_ep = batches_to_ep(loss_per_batch, batches_per_episode)
@@ -578,6 +774,20 @@ function plot_avg_loss(hook::MCES_Hook, batches_per_episode::Int = 1; smooth::In
     plot!(loss_plot, ylabel = raw ? "Avg. Raw Actor Loss" : "Avg. Actor Loss")
 end
 
+"""
+    plot_reward_and_loss(hook::MCES_Hook, batches_per_episode::Int = 1; smooth::Int = 0)
+
+Creates a two-panel plot with rewards and losses.
+
+# Arguments
+- `hook`: Hook object containing rewards and loss data.
+- `batches_per_episode::Int`: Number of batches per episode (default: 1).
+- `smooth::Int`: Level of binomial smoothing to apply (default: 0).
+
+# Returns
+- Combined plot with rewards on top panel and losses on bottom panel.
+
+"""
 function plot_reward_and_loss(hook::MCES_Hook, batches_per_episode::Int = 1; smooth::Int = 0)
     rwd_plot = plot_reward(hook, smooth = smooth);
     loss_plot = plot_avg_loss(hook, batches_per_episode, smooth = smooth);
@@ -597,6 +807,25 @@ end
 ##########################################################################
 # Plot losses
 
+"""
+    plot_debug_vpg(hook::MCES_Hook; start = 1, finish = length(hook.debug["actor_loss"]), 
+                  smooth::Int = 0)
+
+Creates a multi-panel plot of VPG-C debug metrics.
+
+# Arguments
+- `hook`: Hook object containing debug data.
+- `start`: Starting index for plotting (default: 1).
+- `finish`: Ending index for plotting (default: length of actor_loss).
+- `smooth::Int`: Level of binomial smoothing to apply (default: 0).
+
+# Returns
+- Multi-panel plot with VPG-C-specific metrics.
+
+# Details
+- Plots 8 metrics: avg_adv, avg_loss, raw_avg_loss, actor_loss, critic_loss, actor_norm, critic_norm, δ.
+- Related functions: `plot_debug_a2c` and `plot_debug_ppo` provide similar functionality for other algorithms.
+"""
 function plot_debug_vpg(hook::MCES_Hook; start = 1, finish = length(hook.debug["actor_loss"]), smooth::Int = 0)
     d = hook.debug ::Dict{String,Vector{Float32}}
     keys =  ["avg_adv", "avg_loss", "raw_avg_loss", "actor_loss", 
@@ -621,6 +850,25 @@ end
 ##########################################################################
 # Plot Grid, EV, and AuxTESS
 # Function to compute the combined grid and EV cost
+"""
+    compute_grid_ev(hook::MCES_Hook, grid_weight::Real, ev_weight::Real; 
+                   combined::Bool = false, episodic::Bool = false, timesteps_per_day::Int = 96)
+
+Computes weighted grid and EV costs from a hook object.
+
+# Arguments
+- `hook`: Hook object containing reward dissection data.
+- `grid_weight`, `ev_weight`: Weights for grid and EV components.
+- `combined`: Whether to return a single combined cost (default: false).
+- `episodic`: Whether to aggregate costs per episode/day (default: false).
+- `timesteps_per_day`: Number of timesteps per day for episodic aggregation (default: 96).
+
+# Returns
+- Combined costs or tuple of (grid_cost, ev_cost).
+
+# Details
+- Related functions: `compute_grid_cost` and `compute_ev_cost` extract individual components.
+"""
 function compute_grid_ev(hook::MCES_Hook, grid_weight::Real, ev_weight::Real; 
     combined::Bool = false, episodic::Bool = false, timesteps_per_day::Int = 96)
 
@@ -649,6 +897,23 @@ function compute_grid_cost(hook::MCES_Hook; episodic::Bool = false, timesteps_pe
     return grid_cost
 end
 
+"""
+    compute_ev_cost(hook::MCES_Hook; episodic::Bool = false, timesteps_per_day::Int = 96)
+
+Extracts EV cost components from hook data.
+
+# Arguments
+- `hook::MCES_Hook`: Hook object containing reward dissection data.
+- `episodic::Bool`: Whether to aggregate costs per episode/day (default: false).
+- `timesteps_per_day::Int`: Number of timesteps per day for episodic aggregation (default: 96).
+
+# Returns
+- Vector of EV costs, either timestep-by-timestep or aggregated by episode.
+
+# Details
+- Extracts "EV" component from reward dissection.
+- When `episodic=true`, sums costs for each day/episode using the partition function.
+"""
 function compute_ev_cost(hook::MCES_Hook; episodic::Bool = false, timesteps_per_day::Int = 96)
     dissection = hook.reward_dissect
     ev_cost = dissection["EV"]
@@ -662,7 +927,27 @@ end
 
 
 
+"""
+    plot_grid_ev(hook::MCES_Hook; w_grid::Real = 1.0, w_ev::Real = 1.0, 
+                episodic::Bool = true, save_path::String = "", dpi::Int = 600)
 
+Creates a two-panel plot showing grid costs and EV penalties.
+
+# Arguments
+- `hook`: Hook object containing reward data.
+- `w_grid`, `w_ev`: Weights for grid and EV components (defaults: 1.0).
+- `episodic`: Whether to aggregate costs per episode/day (default: true).
+- `save_path`: Optional path to save the plot.
+- `dpi`: Resolution of the plot (default: 600).
+
+# Returns
+- Two-panel plot with grid costs and EV penalties.
+
+# Details
+- Left panel shows grid exchange costs.
+- Right panel shows EV penalties at departure.
+- Related function: `plot_grid_ev(hook1::MCES_Hook, hook2::MCES_Hook; ...)` for comparing two hooks.
+"""
 function plot_grid_ev(hook::MCES_Hook; 
                       w_grid::Real = 1.0, 
                       w_ev::Real = 1.0, 
@@ -779,6 +1064,29 @@ function plot_grid_ev(hook1::MCES_Hook, hook2::MCES_Hook;
     display(plot_combined)
 end
 
+"""
+    plot_grid_cost(hook1::MCES_Hook, hook2::MCES_Hook; episodic::Bool = true,
+                  save_path::String = "", dpi::Int = 600, size = (800,600),
+                  label1::String = "Hook 1", label2::String = "Hook 2")
+
+Creates a plot comparing grid costs between two hooks.
+
+# Arguments
+- `hook1`, `hook2`: Hook objects to compare.
+- `episodic`: Whether to aggregate costs per episode/day (default: true).
+- `save_path`: Optional path to save the plot.
+- `dpi`: Resolution of the plot (default: 600).
+- `size`: Dimensions of the plot (default: (800, 600)).
+- `label1`, `label2`: Labels for the two data series (defaults: "Hook 1", "Hook 2").
+
+# Returns
+- Plot comparing grid costs with means indicated.
+
+# Details
+- Shows daily grid exchange costs for both hooks.
+- Includes dashed lines showing average costs.
+- Related function: `plot_ev_cost` provides similar comparison for EV penalties.
+"""
 function plot_grid_cost(hook1::MCES_Hook, hook2::MCES_Hook;
                         episodic::Bool = true,
                         save_path::String = "",
@@ -832,7 +1140,29 @@ function plot_grid_cost(hook1::MCES_Hook, hook2::MCES_Hook;
     return p1
 end
 
+"""
+    plot_ev_cost(hook1::MCES_Hook, hook2::MCES_Hook; episodic::Bool = true,
+                save_path::String = "", dpi::Int = 600, size = (800,600),
+                label1::String = "Hook 1", label2::String = "Hook 2")
 
+Creates a plot comparing EV penalties between two hooks.
+
+# Arguments
+- `hook1`, `hook2`: Hook objects to compare.
+- `episodic::Bool`: Whether to aggregate costs per episode/day (default: true).
+- `save_path::String`: Optional path to save the plot.
+- `dpi::Int`: Resolution of the plot (default: 600).
+- `size`: Dimensions of the plot (default: (800, 600)).
+- `label1`, `label2`: Labels for the two data series (defaults: "Hook 1", "Hook 2").
+
+# Returns
+- Plot comparing squared EV penalties with appropriate styling.
+
+# Details
+- Shows the squared distance to desired SoC at departure for each hook.
+- Uses color coding (green for hook1, orange for hook2) for visual distinction.
+- Related function: `plot_grid_cost` provides similar comparison for grid costs.
+"""
 function plot_ev_cost(hook1::MCES_Hook, hook2::MCES_Hook;
                       episodic::Bool = true,
                       save_path::String = "",
@@ -871,6 +1201,24 @@ function plot_ev_cost(hook1::MCES_Hook, hook2::MCES_Hook;
     return p2
 end
 
+"""
+    plot_auxtess(hook1::MCES_Hook, hook2::MCES_Hook; daylength::Integer = 96,
+                save_path::String = "", dpi::Int = 600, size = (800, 600),
+                label1::String = "Hook 1", label2::String = "Hook 2")
+
+Creates a plot comparing auxiliary TESS values between two hooks.
+
+# Arguments
+- `hook1`, `hook2`: Hook objects to compare.
+- `daylength`: Number of timesteps per day (default: 96).
+- `save_path`: Optional path to save the plot.
+- `dpi`: Resolution of the plot (default: 600).
+- `size`: Dimensions of the plot (default: (800, 600)).
+- `label1`, `label2`: Labels for the two data series (defaults: "Hook 1", "Hook 2").
+
+# Returns
+- Plot comparing daily auxiliary TESS values.
+"""
 function plot_auxtess(hook1::MCES_Hook, hook2::MCES_Hook;
                       daylength::Integer = 96,
                       save_path::String = "",
@@ -917,6 +1265,23 @@ end
 
 ##########################################################################
 # Plot SoCs
+"""
+    plot_soc(hook::MCES_Hook; save_path::String = "")
+
+Creates a comprehensive visualization of State of Charge (SoC) data for multiple energy storage systems.
+
+# Arguments
+- `hook::MCES_Hook`: A hook object containing energy system data.
+- `save_path::String = ""`: Optional path to save the plot (no saving if empty).
+
+# Details
+Generates three plots:
+1. Full year SoC for all storage components (EV, BESS, TESS)
+2. Summer day (middle of year) SoC detail
+3. Winter day (end of year) SoC detail
+
+All plots show SoC as percentages (0-120%) with appropriate styling and legends.
+"""
 function plot_soc(hook::MCES_Hook; save_path::String = "")
     energy = hook.energy
     timesteps = Int32.(energy["t"])
@@ -983,6 +1348,27 @@ function plot_soc(hook::MCES_Hook; save_path::String = "")
     display(combined_plot)
 end
 
+"""
+    plot_soc(hook1::MCES_Hook, hook2::MCES_Hook; 
+            save_path::String = "",
+            label1::String = "Hook 1",
+            label2::String = "Hook 2",
+            day_to_plot::Integer = 1,
+            daylength::Integer = 96)
+
+Creates a comparative visualization of State of Charge (SoC) between two RL experiments.
+
+# Arguments
+- `hook1::MCES_Hook`, `hook2::MCES_Hook`: Two hook objects containing energy system data.
+- `save_path::String = ""`: Optional path to save the plot.
+- `label1::String = "Hook 1"`, `label2::String = "Hook 2"`: Labels for the two data sources.
+- `day_to_plot::Integer = 1`: Which day to visualize (1-indexed).
+- `daylength::Integer = 96`: Number of timesteps per day.
+
+# Details
+Generates a detailed hourly comparison of SoC values for both experiments on the specified day.
+Uses distinct colors to differentiate between the two hooks, with consistent color schemes for BESS, EV, and TESS components.
+"""
 function plot_soc(hook1::MCES_Hook, hook2::MCES_Hook;
                     save_path::String = "",
                     label1::String = "Hook 1",
@@ -1068,7 +1454,29 @@ function plot_soc(hook1::MCES_Hook, hook2::MCES_Hook;
     return p
 end
 
+"""
+    plot_soc_year(hook1::MCES_Hook, hook2::MCES_Hook; 
+                save_path1::String = "", 
+                save_path2::String = "", 
+                label1::String = "Hook 1", 
+                label2::String = "Hook 2", 
+                daylength::Int = 96)
 
+Creates separate full-year visualizations of State of Charge (SoC) for two simulations.
+
+# Arguments
+- `hook1::MCES_Hook`, `hook2::MCES_Hook`: Two hook objects containing energy system data.
+- `save_path1::String = ""`, `save_path2::String = ""`: Optional paths to save each plot.
+- `label1::String = "Hook 1"`, `label2::String = "Hook 2"`: Labels for the two data sources.
+- `daylength::Int = 96`: Number of timesteps per day.
+
+# Returns
+A tuple of (plot1, plot2) containing the generated plots.
+
+# Details
+Generates two separate annual plots showing SoC for all storage components (BESS, EV, TESS).
+Each plot uses a coordinated color scheme with appropriate styling for each component.
+"""
 function plot_soc_year(hook1::MCES_Hook, hook2::MCES_Hook; 
                        save_path1::String = "", 
                        save_path2::String = "", 
@@ -1126,6 +1534,22 @@ end
 ##########################################################################
 # Plot Actions and Unfiltered actions
 
+"""
+    plot_decisions(hook::MCES_Hook, timesteps_range::Union{UnitRange{Int64}, Nothing} = nothing; 
+                 raw::Bool = false, save_path="")
+
+Visualizes control decisions (power flows) for key system components.
+
+# Arguments
+- `hook::MCES_Hook`: Hook object containing energy system data.
+- `timesteps_range::Union{UnitRange{Int64}, Nothing} = nothing`: Optional range of timesteps to plot.
+- `raw::Bool = false`: Whether to include raw (unfiltered) control decisions.
+- `save_path::String = ""`: Optional path to save the plot.
+
+# Details
+Plots power flows (in kW) for heat pump electricity consumption, BESS, and EV.
+When `raw=true`, also shows unfiltered/raw control decisions with dashed lines.
+"""
 function plot_decisions(hook::MCES_Hook, timesteps_range::Union{UnitRange{Int64}, Nothing} = nothing; raw::Bool = false, save_path="")
     energy = hook.energy
     timesteps = Int64.(energy["t"])
@@ -1179,6 +1603,23 @@ end
 ##########################################################################
 # Plot Power balance
 
+"""
+    plot_power_balance(hook::MCES_Hook; save_path::String="")
+
+Creates a comprehensive visualization of electrical power balance in the system.
+
+# Arguments
+- `hook::MCES_Hook`: Hook object containing energy system data.
+- `save_path::String = ""`: Optional path to save the plot.
+
+# Details
+Generates three plots:
+1. Full year power balance
+2. Summer day (middle of year) power balance
+3. Winter day (end of year) power balance
+
+Each plot shows all power components: load, PV, grid, heat pump, BESS, and EV.
+"""
 function plot_power_balance(hook::MCES_Hook; save_path::String="")
     energy = hook.energy
     timesteps = Int32.(energy["t"])
@@ -1214,6 +1655,31 @@ function plot_power_balance(hook::MCES_Hook; save_path::String="")
     display(combined_plot)
 end
 
+"""
+    plot_power_balance(hook1::MCES_Hook, hook2::MCES_Hook;
+                    save_path::String = "",
+                    label1::String = "Hook 1",
+                    label2::String = "Hook 2",
+                    day_to_plot::Integer = 1,
+                    daylength::Integer = 96)
+
+Creates a comparative visualization of electrical power balance between two simulations.
+
+# Arguments
+- `hook1::MCES_Hook`, `hook2::MCES_Hook`: Two hook objects containing energy system data.
+- `save_path::String = ""`: Optional path to save the plot.
+- `label1::String = "Hook 1"`, `label2::String = "Hook 2"`: Labels for the two data sources.
+- `day_to_plot::Integer = 1`: Which day to visualize (1-indexed).
+- `daylength::Integer = 96`: Number of timesteps per day.
+
+# Returns
+The generated plot.
+
+# Details
+Shows hourly comparison of power flows with distinguished colors for each simulation.
+Includes EV availability visualization with gray background for periods when EV is unavailable.
+Shows PV generation and electrical load as reference curves.
+"""
 function plot_power_balance(hook1::MCES_Hook, hook2::MCES_Hook;
                        save_path::String = "",
                        label1::String = "Hook 1",
@@ -1348,6 +1814,24 @@ end
 
 ##########################################################################
 # Thermal balance
+"""
+    plot_thermal_balance(hook::MCES_Hook; save_path::String = "")
+
+Creates a comprehensive visualization of thermal power balance in the system.
+
+# Arguments
+- `hook::MCES_Hook`: Hook object containing energy system data.
+- `save_path::String = ""`: Optional path to save the plot.
+
+# Details
+Generates three plots:
+1. Full year thermal balance
+2. Summer day (middle of year) thermal balance
+3. Winter day (end of year) thermal balance
+
+Each plot shows thermal load, solar thermal (ST), thermal energy storage system (TESS),
+and heat pump thermal output.
+"""
 function plot_thermal_balance(hook::MCES_Hook; save_path::String = "")
     energy = hook.energy
     timesteps = Int32.(energy["t"])
@@ -1381,7 +1865,31 @@ function plot_thermal_balance(hook::MCES_Hook; save_path::String = "")
     display(combined_plot)
 end
 
+"""
+    plot_thermal_balance(hook1::MCES_Hook, hook2::MCES_Hook;
+                       save_path::String = "",
+                       label1::String = "Hook 1",
+                       label2::String = "Hook 2",
+                       day_to_plot::Integer = 1,
+                       daylength::Integer = 96)
 
+Creates a comparative visualization of thermal power balance between two simulations.
+
+# Arguments
+- `hook1::MCES_Hook`, `hook2::MCES_Hook`: Two hook objects containing energy system data.
+- `save_path::String = ""`: Optional path to save the plot.
+- `label1::String = "Hook 1"`, `label2::String = "Hook 2"`: Labels for the two data sources.
+- `day_to_plot::Integer = 1`: Which day to visualize (1-indexed).
+- `daylength::Integer = 96`: Number of timesteps per day.
+
+# Returns
+The generated plot.
+
+# Details
+Shows hourly comparison of thermal power flows with distinguished colors for each simulation.
+Includes heat pump thermal output and TESS power for both simulations.
+Shows solar thermal generation and thermal load as reference curves.
+"""
 function plot_thermal_balance(hook1::MCES_Hook, hook2::MCES_Hook;
                             save_path::String = "",
                             label1::String = "Hook 1",
@@ -1466,7 +1974,20 @@ end
 
 #################################################################################################
 # Plot exogenous info
+"""
+    plot_exog(hook::MCES_Hook; save_path::String="", day_to_plot::Integer=1, daylength::Integer=96)
 
+Creates a plot of exogenous data (electrical load, thermal load, PV generation, and EV availability) for a specific day.
+
+# Arguments
+- `hook::MCES_Hook`: Hook containing energy data.
+- `save_path::String`: Optional path to save the figure.
+- `day_to_plot::Integer`: Which day to plot (defaults to 1).
+- `daylength::Integer`: Number of timesteps per day (defaults to 96).
+
+# Returns
+The plot object.
+"""
 function plot_exog(hook::MCES_Hook;
                     save_path::String="",
                     day_to_plot::Integer = 1,
@@ -1525,6 +2046,21 @@ end
 
 ################################################################################################
 # Plot Mean and Std
+"""
+    plot_mean_and_std(hook::MCES_Hook, timesteps_range::Union{UnitRange{Int64}, Nothing}=nothing; 
+                       downsample::Bool=true, save_path="")
+
+Creates side-by-side plots showing mean and standard deviation values from debug data for EV, BESS, and HPe metrics.
+
+# Arguments
+- `hook::MCES_Hook`: Hook containing debug data.
+- `timesteps_range`: Optional range of timesteps to plot.
+- `downsample::Bool`: Whether to downsample the data (defaults to true), done to speed up plotting without loosing much precision.
+- `save_path`: Optional path to save the figure.
+
+# Returns
+The combined plot object.
+"""
 function plot_mean_and_std(hook::MCES_Hook, timesteps_range::Union{UnitRange{Int64}, Nothing} = nothing; 
     downsample::Bool = true, save_path = "")
 
@@ -1583,6 +2119,21 @@ function plot_mean_and_std(hook::MCES_Hook, timesteps_range::Union{UnitRange{Int
 end
 #################################################################################################
 # Plot Projections
+"""
+    plot_projections(hook::MCES_Hook, timesteps_range::Union{UnitRange{Int64}, Nothing}=nothing; 
+                      params::Union{MCES_Params, Nothing}=nothing, save_path="")
+
+Creates a 2×2 plot showing various projections from the energy system including agent decisions, initial projections, SoC values, and operational projections. This projections represent the amount by which constraints were violated. 
+
+# Arguments
+- `hook::MCES_Hook`: Hook containing projection data.
+- `timesteps_range`: Optional range of timesteps to plot.
+- `params::Union{MCES_Params, Nothing}`: Optional parameters for weighting values.
+- `save_path`: Optional path to save the figure.
+
+# Returns
+The combined plot object showing 4 different projection plots.
+"""
 function plot_projections(hook::MCES_Hook, timesteps_range::Union{UnitRange{Int64}, Nothing} = nothing; 
     params::Union{MCES_Params, Nothing} = nothing, save_path = "")
 
@@ -1670,7 +2221,18 @@ function plot_projections(hook::MCES_Hook, timesteps_range::Union{UnitRange{Int6
     display(plot_combined)
 end
 
+"""
+    plot_proj_year(hook::MCES_Hook, daylength::Int64=96)
 
+Creates plots showing initial projections and agent decisions (HP, BESS, EV power) over a full year.
+
+# Arguments
+- `hook::MCES_Hook`: Hook containing energy data.
+- `daylength::Int64`: Number of timesteps per day (defaults to 96).
+
+# Returns
+A tuple of two plots: (initial_projection_plot, agent_decisions_plot).
+"""
 function plot_proj_year(hook::MCES_Hook, daylength::Int64 = 96)
     energy = hook.energy
     total_days = div(length(energy["ξp_hp_e"]), daylength)
@@ -1712,6 +2274,24 @@ end
 
 #################################################################################
 # Plot arbitrage
+"""
+    plot_arbitrage(hook1::MCES_Hook, hook2::MCES_Hook; save_path::String="", 
+                   prices=nothing, label1::String="Hook 1", label2::String="Hook 2",
+                   day_to_plot::Integer=1, daylength::Integer=96)
+
+Creates a dual-axis plot comparing grid power exchange for two different hooks alongside electricity prices for a specific day.
+
+# Arguments
+- `hook1::MCES_Hook`, `hook2::MCES_Hook`: Hooks containing grid power data.
+- `save_path::String`: Optional path to save the figure.
+- `prices`: Optional vector of electricity prices. If not provided, prices are derived from hook1. Its better to provide the prices than to derive them, as that relies on various assumptions. 
+- `label1`, `label2`: Labels for the two hooks (defaults to "Hook 1"/"Hook 2").
+- `day_to_plot`: Which day to plot (defaults to 1).
+- `daylength`: Number of timesteps per day (defaults to 96).
+
+# Returns
+The plot object.
+"""
 function plot_arbitrage(hook1::MCES_Hook, hook2::MCES_Hook; 
                         save_path::String="", 
                         prices = nothing, 
@@ -1792,7 +2372,23 @@ function plot_arbitrage(hook1::MCES_Hook, hook2::MCES_Hook;
     return p
 end
 
+"""
+    plot_grid_powers(hook1::MCES_Hook, hook2::MCES_Hook; save_path::String="",
+                     label1::String="Hook 1", label2::String="Hook 2",
+                     day_to_plot::Integer=1, daylength::Integer=96)
 
+Creates a plot comparing grid power exchange for two different hooks for a specific day.
+
+# Arguments
+- `hook1::MCES_Hook`, `hook2::MCES_Hook`: Hooks containing grid power data.
+- `save_path::String`: Optional path to save the figure.
+- `label1`, `label2`: Labels for the two hooks (defaults to "Hook 1"/"Hook 2").
+- `day_to_plot`: Which day to plot (defaults to 1).
+- `daylength`: Number of timesteps per day (defaults to 96).
+
+# Returns
+The plot object.
+"""
 function plot_grid_powers(hook1::MCES_Hook, hook2::MCES_Hook;
                          save_path::String="",
                          label1::String="Hook 1",
@@ -1840,6 +2436,23 @@ function plot_grid_powers(hook1::MCES_Hook, hook2::MCES_Hook;
     return p
 end
 
+"""
+    plot_grid_powers_and_cumcost(hook1::MCES_Hook, hook2::MCES_Hook; save_path::String="",
+                                 label1::String="Hook 1", label2::String="Hook 2",
+                                 day_to_plot::Integer=1, daylength::Integer=96)
+
+Creates a dual-axis plot comparing grid power exchange and cumulative grid costs for two different hooks across two days.
+
+# Arguments
+- `hook1::MCES_Hook`, `hook2::MCES_Hook`: Hooks containing grid power and cost data.
+- `save_path::String`: Optional path to save the figure.
+- `label1`, `label2`: Labels for the two hooks (defaults to "Hook 1"/"Hook 2").
+- `day_to_plot`: Starting day to plot (defaults to 1).
+- `daylength`: Number of timesteps per day (defaults to 96).
+
+# Returns
+A tuple containing (main_plot, legend_plot).
+"""
 function plot_grid_powers_and_cumcost(hook1::MCES_Hook, hook2::MCES_Hook;
                          save_path::String="",
                          label1::String="Hook 1",
@@ -1932,6 +2545,22 @@ function plot_grid_powers_and_cumcost(hook1::MCES_Hook, hook2::MCES_Hook;
     return p, generate_legend(label1, label2)
 end
 
+"""
+    plot_grid_prices(hook::MCES_Hook; save_path::String="", prices=nothing,
+                     day_to_plot::Integer=1, daylength::Integer=96)
+
+Creates a plot of electricity prices for a specific day.
+
+# Arguments
+- `hook::MCES_Hook`: Hook containing grid power data and rewards.
+- `save_path::String`: Optional path to save the figure.
+- `prices`: Optional vector of electricity prices. If not provided, prices are derived from hook.
+- `day_to_plot`: Which day to plot (defaults to 1).
+- `daylength`: Number of timesteps per day (defaults to 96).
+
+# Returns
+The plot object.
+"""
 function plot_grid_prices(hook::MCES_Hook;
                          save_path::String="",
                          prices=nothing,
@@ -1974,6 +2603,22 @@ function plot_grid_prices(hook::MCES_Hook;
     return p
 end
 
+"""
+    plot_arbitrage_sw(hook1::MCES_Hook, hook2::MCES_Hook; save_path::String="",
+                      prices=nothing, label1::String="Hook 1", label2::String="Hook 2")
+
+Creates a side-by-side comparison of summer (day 50) and winter (day 95) arbitrage plots. 
+The selected days rely on the assumption that the simulation of a full year was condensed into 90 days (taking 1 day from every 4).
+
+# Arguments
+- `hook1::MCES_Hook`, `hook2::MCES_Hook`: Hooks containing grid power data.
+- `save_path::String`: Optional path to save the figure.
+- `prices`: Optional vector of electricity prices. If not provided, prices are derived from hook1.
+- `label1`, `label2`: Labels for the two hooks (defaults to "Hook 1"/"Hook 2").
+
+# Returns
+The combined plot object showing summer and winter arbitrage side by side.
+"""
 function plot_arbitrage_sw(hook1::MCES_Hook, hook2::MCES_Hook;
                            save_path::String="",
                            prices=nothing,
@@ -2024,76 +2669,57 @@ end
 #####################################################################################
 # Get many plots for testing results.
 
-function generate_plots(hook::MCES_Hook, folder_path::String; 
-    params::Union{MCES_Params, Nothing} = nothing, extra::String = "", suffix::String = "", prices = nothing)
+"""
+   plot2hooks(; day::Integer=45, save_path::String="", h1::MCES_Hook, h2::MCES_Hook, 
+              ex=exog_test_90, label1::String="Expert MPC", label2::String="RL Agent",
+              width=1500, height=550)
 
-    plot_functions = [
-        (plot_grid_ev, "grid_ev.png"),
-        (plot_reward_dissect, "reward_dissect.png"),
-        (plot_projections, "projections.png"),
-        (plot_soc, "soc.png"),
-        (plot_decisions, "decisions.png"),
-        (plot_power_balance, "power_balance.png"),
-        (plot_thermal_balance, "thermal_balance.png"),
-        (plot_arbitrage, "arbitrage_example.png"),
-        # (plot_mean_and_std, "mean_and_std.png")
-    ]
+Creates a comprehensive visualization comparing two MCES hooks across multiple metrics and saves it as a single large image.
 
-    for (func, filename) in plot_functions
-        # Add suffix to the filename if provided
-        filename_with_suffix = replace(filename, r"\.png$" => "_$suffix.png")
-        full_path = joinpath(folder_path, filename_with_suffix)
-        try
-            if !isnothing(prices) && func == plot_arbitrage
-                func(hook, save_path=full_path, prices = prices);
-                println("Success in generating: $filename_with_suffix")
-                continue
-            end
-            
-            func(hook, save_path=full_path);
-            println("Success in generating: $filename_with_suffix")
+# Arguments
+- `day::Integer`: The day to plot for daily plots (defaults to 45).
+- `save_path::String`: Path where to save the output figure. Recommended file format is SVG.
+- `h1::MCES_Hook`: First hook containing data to plot (typically the baseline/MPC controller).
+- `h2::MCES_Hook`: Second hook containing data to plot (typically the RL agent).
+- `ex`: Exogenous data containing electricity prices (defaults to exog_test_90).
+- `label1::String`: Label for the first hook (defaults to "Expert MPC").
+- `label2::String`: Label for the second hook (defaults to "RL Agent").
+- `width::Integer`: Width of the output figure in pixels (defaults to 1500).
+- `height::Integer`: Height of each subplot in pixels (defaults to 550).
 
+# Returns
+The combined plot layout object containing all subplots.
 
-            if !isnothing(params) && func in [plot_reward_dissect, plot_projections]
-                # Create filename with "w_" prefix and user-provided suffix
-                weighted_filename = replace(filename, r"\.png$" => "_w_$suffix.png")
-                weighted_full_path = joinpath(folder_path, weighted_filename)
-                func(hook, save_path=weighted_full_path, params=params);
-                println("Success in generating: weighted $weighted_filename")
-            end
-        catch e
-            println("Error generating $filename_with_suffix: $(typeof(e))")
-            println("Error message: $e")
-        end
-    end
+# Details
+1. Generates 13 different plots comparing various aspects of the two hooks:
+  - Power balance comparison
+  - Thermal balance comparison
+  - State of charge comparison
+  - Grid power exchange comparison
+  - Electricity price visualization
+  - Grid cost comparison
+  - EV cost comparison
+  - Annual SoC profiles (two plots)
+  - Annual projection
+  - Auxiliary TESS metrics
+  - Grid powers with cumulative costs (with separate legend)
 
-    if !isnothing(params)
-        params_file_path = joinpath(folder_path, "params_log.txt")
-        try
-            open(params_file_path, "w") do file
-                println(file, fieldnames(typeof(params)))
-                println(file, "Params: ")
-                println(file, params)
-                println(file, "Extra Information:")
-                println(file, extra)
-            end
-            println("Successfully logged params to params_log.txt")
-        catch e
-            println("Error writing params to params_log.txt: $(typeof(e))")
-            println("Error message: $e")
-        end
-    end
+2. Arranges all plots in a vertical layout with specific margins.
 
-end
-
-function plot2hooks(;
+# Notes and Warnings
+- This function generates a very large vertical figure.
+- SVG output format is strongly recommended.
+- Ensure all required plotting functions (plot_power_balance, plot_thermal_balance, etc.) are available.
+- Processing time may be significant due to the number and complexity of plots.
+"""
+function plot2hooks(; 
     day::Integer = 45,
     save_path::String = "",
     h1::MCES_Hook,
     h2::MCES_Hook,
     ex = exog_test_90,
     label1::String = "Expert MPC",
-    label2::String = "RL Agent (PPO)",
+    label2::String = "RL Agent",
     width = 1500,
     height = 550,
     )
@@ -2130,54 +2756,6 @@ function plot2hooks(;
 
     return plot_layout
 end
-
-
-###################################################################
-# Plots of Neural Network Parameters
-function plot_multiple_archs(widths::Union{Vector{Int}, AbstractRange}, types::Vector{Int})
-    # Dictionary mapping type numbers to architecture names
-    type_names = Dict(
-        1 => "Constant Width (CW)",
-        2 => "Mid CW",
-        3 => "Deep CW",
-        4 => "CW + Std",
-        5 => "Pyramid",
-        6 => "Deep Pyramid",
-        7 => "Bottleneck",
-        8 => "Residual",
-        9 => "Deep Residual",
-        10 => "Residual + Bottleneck",
-        11 => "3 CW Branches ",
-        12 => "3 Pyramid Branches "
-    )
-
-    p = plot(
-        xlabel="Input Width [-]",
-        ylabel="Number of Parameters",
-        legend= :outerright,
-        yaxis = :log10,
-        margin = 5mm,
-        dpi = 600
-    )
-
-
-    for type in types
-        parameters = count_nn_params(widths, type, ns = 30)
-        plot!(p, widths, parameters, 
-              label=get(type_names, type, "Type $type"),
-              linewidth=1.5,
-              linestyle = type < 7 ? :solid : :dot,
-              )
-    end
-    display(p)
-    # Uncomment the following line if you want to save the plot
-    # savefig(p,joinpath(@__DIR__, "..","Figs\\widthvsparams.svg"))
-    
-    return p
-end
-
-########################################################################################
-
 
 
 

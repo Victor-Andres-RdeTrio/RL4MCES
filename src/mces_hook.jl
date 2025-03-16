@@ -200,6 +200,20 @@ end
 
 Base.getindex(h::MCES_Hook) = h.episode_rewards
 
+"""
+    (h::MCES_Hook)(::PreExperimentStage, agent, env)
+
+Initialize the hook's data structures before starting an experiment.
+
+# Arguments
+- `h::MCES_Hook`: The hook instance to initialize
+- `agent`: The agent being used in the experiment
+- `env`: The environment being used in the experiment
+
+# Actions
+1. Creates reward dissection dictionary if empty
+2. Creates energy tracking dictionary if empty
+"""
 function (h::MCES_Hook)(::PreExperimentStage, agent, env)
     if isempty(h.reward_dissect)
         h.reward_dissect = create_reward_dissect()
@@ -212,6 +226,22 @@ function (h::MCES_Hook)(::PreExperimentStage, agent, env)
     nothing
 end
 
+"""
+    (h::MCES_Hook)(::PostActStage, agent, env)
+
+Record environment metrics after an agent action.
+
+# Arguments
+- `h::MCES_Hook`: The hook instance
+- `agent`: The agent that performed the action
+- `env`: The environment after the action
+
+# Actions
+1. Accumulates reward
+2. Records detailed reward components in `reward_dissect`
+3. Records energy metrics in `energy` dictionary
+4. Records constraint violations
+"""
 function (h::MCES_Hook)(::PostActStage, agent, env) 
     h.reward += reward(env)
     
@@ -264,6 +294,20 @@ function (h::MCES_Hook)(::PostActStage, agent, env)
     nothing
 end
 
+"""
+    (h::MCES_Hook)(::PostEpisodeStage, agent, env)
+
+Finalize metrics at the end of an episode.
+
+# Arguments
+- `h::MCES_Hook`: The hook instance
+- `agent`: The agent used in the episode
+- `env`: The environment used in the episode
+
+# Actions
+1. Stores accumulated episode reward
+2. Resets reward accumulator for next episode
+"""
 function (h::MCES_Hook)(::PostEpisodeStage, agent, env)
     push!(h.episode_rewards, h.reward)
     h.reward = 0.0f0
@@ -272,6 +316,21 @@ end
 
 #####################################################################################################
 # Hook extra functionality for myVPG
+"""
+    (h::MCES_Hook)(::PreExperimentStage, agent::Agent{<:myVPG}, env)
+
+Initialize the hook's data structures before starting a VPG-C experiment.
+
+# Arguments
+- `h::MCES_Hook`: The hook instance to initialize
+- `agent::Agent{<:myVPG}`: The VPG-C agent
+- `env`: The environment being used
+
+# Actions
+1. Creates reward dissection dictionary if empty
+2. Creates energy tracking dictionary if empty
+3. Creates VPG-C debug dictionary if empty
+"""
 function (h::MCES_Hook)(::PreExperimentStage, agent::Agent{<:myVPG}, env)
     if isempty(h.reward_dissect)
         h.reward_dissect = create_reward_dissect()
@@ -287,6 +346,20 @@ function (h::MCES_Hook)(::PreExperimentStage, agent::Agent{<:myVPG}, env)
     nothing
 end
 
+"""
+    (h::MCES_Hook)(::PostExperimentStage, agent::Agent{<:myVPG}, env)
+
+Process and store VPG-C metrics at the end of an experiment.
+
+# Arguments
+- `h::MCES_Hook`: The hook instance
+- `agent::Agent{<:myVPG}`: The VPG-C agent
+- `env`: The environment used
+
+# Actions
+1. Transfers accumulated metrics from agent policy to hook's debug dictionary
+2. Clears agent policy buffers
+"""
 function (h::MCES_Hook)(::PostExperimentStage, agent::Agent{<:myVPG}, env)
     p = agent.policy
     d = h.debug
@@ -319,6 +392,21 @@ end
 #####################################################################################################
 # Hook extra functionality for A2CGAE
 
+"""
+    (h::MCES_Hook)(::PreExperimentStage, agent::Agent{<:A2CGAE}, env)
+
+Initialize the hook's data structures before starting an A2C experiment.
+
+# Arguments
+- `h::MCES_Hook`: The hook instance to initialize
+- `agent::Agent{<:A2CGAE}`: The A2C agent
+- `env`: The environment being used
+
+# Actions
+1. Creates reward dissection dictionary if empty
+2. Creates energy tracking dictionary if empty
+3. Creates A2C-specific debug dictionary if empty
+"""
 function (h::MCES_Hook)(::PreExperimentStage, agent::Agent{<:A2CGAE}, env)
     if isempty(h.reward_dissect)
         h.reward_dissect = create_reward_dissect()
@@ -334,6 +422,20 @@ function (h::MCES_Hook)(::PreExperimentStage, agent::Agent{<:A2CGAE}, env)
     nothing
 end
 
+"""
+    (h::MCES_Hook)(::PostExperimentStage, agent::Agent{<:A2CGAE}, env)
+
+Process and store A2CGAE-specific metrics at the end of an experiment.
+
+# Arguments
+- `h::MCES_Hook`: The hook instance
+- `agent::Agent{<:A2CGAE}`: The A2CGAE agent
+- `env`: The environment used
+
+# Actions
+1. Transfers accumulated metrics from agent policy to hook's debug dictionary
+2. Clears agent policy buffers including A2CGAE-specific metrics
+"""
 function (h::MCES_Hook)(::PostExperimentStage, agent::Agent{<:A2CGAE}, env)
 
     p = agent.policy
@@ -373,6 +475,21 @@ end
 #####################################################################################################
 # Hook extra functionality for A2CGAE
 
+"""
+    (h::MCES_Hook)(::PreExperimentStage, agent::Agent{<:PPO}, env)
+
+Initialize the hook's data structures before starting a PPO experiment.
+
+# Arguments
+- `h::MCES_Hook`: The hook instance to initialize
+- `agent::Agent{<:PPO}`: The PPO agent
+- `env`: The environment being used
+
+# Actions
+1. Creates reward dissection dictionary if empty
+2. Creates energy tracking dictionary if empty
+3. Creates PPO-specific debug dictionary if empty
+"""
 function (h::MCES_Hook)(::PreExperimentStage, agent::Agent{<:PPO}, env)
     if isempty(h.reward_dissect)
         h.reward_dissect = create_reward_dissect()
@@ -388,6 +505,20 @@ function (h::MCES_Hook)(::PreExperimentStage, agent::Agent{<:PPO}, env)
     nothing
 end
 
+"""
+    (h::MCES_Hook)(::PostExperimentStage, agent::Agent{<:PPO}, env)
+
+Process and store PPO-specific metrics at the end of an experiment.
+
+# Arguments
+- `h::MCES_Hook`: The hook instance
+- `agent::Agent{<:PPO}`: The PPO agent
+- `env`: The environment used
+
+# Actions
+1. Transfers accumulated metrics from agent policy to hook's debug dictionary
+2. Clears agent policy buffers including PPO-specific metrics (clip fractions, KL divergence)
+"""
 function (h::MCES_Hook)(::PostExperimentStage, agent::Agent{<:PPO}, env)
     p = agent.policy
     d = h.debug
@@ -426,9 +557,32 @@ end
 
 #####################################################
 # VoidHook and Moderate Hook functionality
+"""
+    Base.getindex(h::MCES_Moderate_Hook)
 
+Access the episode rewards stored in the hook.
+
+# Arguments
+- `h::MCES_Moderate_Hook`: The hook instance
+
+# Returns
+- Vector of episode rewards
+"""
 Base.getindex(h::MCES_Moderate_Hook) = h.episode_rewards
 
+"""
+    (h::MCES_Moderate_Hook)(::PreExperimentStage, agent, env)
+
+Initialize the memory-efficient hook's data structures before starting an experiment.
+
+# Arguments
+- `h::MCES_Moderate_Hook`: The hook instance to initialize
+- `agent`: The agent being used in the experiment
+- `env`: The environment being used in the experiment
+
+# Actions
+1. Creates minimal reward dissection dictionary if empty, using Float16 for memory efficiency
+"""
 function (h::MCES_Moderate_Hook)(::PreExperimentStage, agent, env)
     if isempty(h.reward_dissect)
         h.reward_dissect = Dict{String, Vector{Float16}}(
@@ -439,6 +593,20 @@ function (h::MCES_Moderate_Hook)(::PreExperimentStage, agent, env)
     nothing
 end
 
+"""
+    (h::MCES_Moderate_Hook)(::PostActStage, agent, env)
+
+Record minimal environment metrics after an agent action with memory efficiency.
+
+# Arguments
+- `h::MCES_Moderate_Hook`: The hook instance
+- `agent`: The agent that performed the action
+- `env`: The environment after the action
+
+# Actions
+1. Accumulates reward using Float16
+2. Records only essential reward components in `reward_dissect`
+"""
 @inline function (h::MCES_Moderate_Hook)(::PostActStage, agent, env)
     h.reward += Float16(reward(env))
 
@@ -448,11 +616,38 @@ end
 
 end
 
+"""
+    (h::MCES_Moderate_Hook)(::PostEpisodeStage, agent, env)
+
+Finalize metrics at the end of an episode for memory-efficient hook.
+
+# Arguments
+- `h::MCES_Moderate_Hook`: The hook instance
+- `agent`: The agent used in the episode
+- `env`: The environment used in the episode
+
+# Actions
+1. Stores accumulated episode reward as Float16
+2. Resets reward accumulator for next episode
+"""
 function (h::MCES_Moderate_Hook)(::PostEpisodeStage, agent, env)
     push!(h.episode_rewards, h.reward)
     h.reward = Float16(0.0)
 end
 
+"""
+    (h::Union{MCES_Moderate_Hook, VoidHook})(::PostExperimentStage, agent::Agent{<:myVPG}, env)
+
+Clean up VPG-C agent buffers at the end of an experiment without storing metrics.
+
+# Arguments
+- `h::Union{MCES_Moderate_Hook, VoidHook}`: The hook instance
+- `agent::Agent{<:myVPG}`: The VPG-C agent
+- `env`: The environment used
+
+# Actions
+1. Clears all agent policy buffers
+"""
 function (h::Union{MCES_Moderate_Hook, VoidHook})(::PostExperimentStage, agent::Agent{<:myVPG}, env)
     p = agent.policy
     empty!(p.avg_adv)
@@ -467,6 +662,19 @@ function (h::Union{MCES_Moderate_Hook, VoidHook})(::PostExperimentStage, agent::
     nothing
 end
 
+"""
+    (h::Union{MCES_Moderate_Hook, VoidHook})(::PostExperimentStage, agent::Agent{<:A2CGAE}, env)
+
+Clean up A2C agent buffers at the end of an experiment without storing metrics.
+
+# Arguments
+- `h::Union{MCES_Moderate_Hook, VoidHook}`: The hook instance
+- `agent::Agent{<:A2CGAE}`: The A2C agent
+- `env`: The environment used
+
+# Actions
+1. Clears all agent policy buffers including A2C-specific metrics
+"""
 function (h::Union{MCES_Moderate_Hook, VoidHook})(::PostExperimentStage, agent::Agent{<:A2CGAE}, env)
     p = agent.policy
     empty!(p.avg_adv)
@@ -483,6 +691,19 @@ function (h::Union{MCES_Moderate_Hook, VoidHook})(::PostExperimentStage, agent::
     nothing
 end
 
+"""
+    (h::Union{MCES_Moderate_Hook, VoidHook})(::PostExperimentStage, agent::Agent{<:PPO}, env)
+
+Clean up PPO agent buffers at the end of an experiment without storing metrics.
+
+# Arguments
+- `h::Union{MCES_Moderate_Hook, VoidHook}`: The hook instance
+- `agent::Agent{<:PPO}`: The PPO agent
+- `env`: The environment used
+
+# Actions
+1. Clears all agent policy buffers including PPO-specific metrics
+"""
 function (h::Union{MCES_Moderate_Hook, VoidHook})(::PostExperimentStage, agent::Agent{<:PPO}, env)
     p = agent.policy
     empty!(p.avg_adv)

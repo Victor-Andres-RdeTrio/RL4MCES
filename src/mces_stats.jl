@@ -118,6 +118,26 @@ end
 ####################################################################
 # Fitting distributions
 
+"""
+    fitdist(arr)
+
+Fits multiple probability distributions to the provided data array and returns the fitted distribution objects.
+
+# Arguments
+- `arr`: The input data array to fit distributions to.
+
+# Returns
+- A dictionary mapping distribution names to their fitted distribution objects.
+
+# Details
+1. Attempts to fit various distributions including Normal, LogNormal, Gamma, Weibull, Exponential, Pareto, InverseGaussian, Laplace, and Rayleigh.
+2. Handles zero values in the data for distributions that require strictly positive values by adding a small epsilon.
+3. Returns `nothing` for distributions that fail to fit, with error messages printed to the console.
+
+# Notes
+- The function creates a small epsilon (1/1000 of the smallest non-zero value) when fitting distributions that can't handle zeros.
+- Error handling is provided for domain errors and argument errors.
+"""
 function fitdist(arr)
     # Define distributions to fit
     distributions = [
@@ -179,6 +199,26 @@ function fitdist(arr)
     return fits
 end
 
+"""
+    check_fit(arr, fit_model)
+
+Evaluates the goodness of fit for a probability distribution model against the provided data.
+
+# Arguments
+- `arr`: The input data array used for evaluation.
+- `fit_model`: The fitted distribution model to evaluate.
+
+# Returns
+- A NamedTuple containing the following metrics:
+  - `aic`: Akaike Information Criterion value (lower is better).
+  - `bic`: Bayesian Information Criterion value (lower is better).
+  - `ks_pvalue`: p-value from the Kolmogorov-Smirnov test (higher indicates better fit).
+
+# Details
+1. Calculates the log-likelihood of the data given the fitted model.
+2. Computes AIC and BIC using the log-likelihood and number of parameters.
+3. Performs an approximate one-sample Kolmogorov-Smirnov test to assess the fit.
+"""
 function check_fit(arr, fit_model)
     # Get the log-likelihood of the fitted model
     loglike = loglikelihood(fit_model, arr)
@@ -202,6 +242,30 @@ function check_fit(arr, fit_model)
     )
 end
 
+"""
+    compare_fits(arr)
+
+Compares multiple distribution fits to the provided data and presents the results sorted by AIC.
+
+# Arguments
+- `arr`: The input data array to fit and compare distributions against.
+
+# Returns
+- A dictionary mapping distribution names to their goodness-of-fit metrics.
+
+# Details
+1. Calls `fitdist()` to fit multiple distributions to the data.
+2. For each successful fit, calls `check_fit()` to compute goodness-of-fit metrics.
+3. Sorts the results by AIC (lower is better) and prints a comparison table.
+4. For each model, displays:
+   - AIC (Akaike Information Criterion)
+   - BIC (Bayesian Information Criterion)
+   - KS p-value (p > 0.05 indicates a good fit)
+
+# Notes
+- Models that fail to fit are excluded from the comparison.
+- This function provides a comprehensive way to identify the best-fitting distribution for the given data.
+"""
 function compare_fits(arr)
     fits = fitdist(arr)
     results = Dict{String, NamedTuple}()

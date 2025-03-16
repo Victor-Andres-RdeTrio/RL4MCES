@@ -149,4 +149,39 @@ function simulate_degrading!(stgAsset::Union{BESSData,TESSData}, results::Dict, 
     nothing
 end
 
+
+"""
+    run_TransitionEnv!(house::MCES_Env, policy; exog::Exogenous_BatchCollection)::MCES_Hook
+
+Run a single episode transition of the EMS module.
+
+# Arguments
+- `house::MCES_Env`: The MCES environment to run the transition in.
+- `policy`: The policy to use for decision making.
+- `exog::Exogenous_BatchCollection`: Exogenous data for the transition.
+
+# Returns
+- An `MCES_Hook` containing data collected during the transition.
+
+# Details
+1. Creates a new hook for data collection.
+2. Sets up an agent with the provided policy.
+3. Configures a stop condition for one episode.
+4. Resets the exogenous data.
+5. Calls `run_free` to execute the transition without learning.
+6. Returns the hook with collected data.
+"""
+function run_TransitionEnv!(house::MCES_Env, policy; 
+    exog::Exogenous_BatchCollection)::MCES_Hook
+
+    hook = MCES_Hook()
+    trajectory = Trajectory(container=Episode(ElasticArraySARTTraces(state=Float32 => (length(state(house)),), action=Float32 =>(3,))))
+    agent = Agent(policy, trajectory)
+    stop_condition = StopAfterEpisode(1)
+    exogenous_reset!(house)
+    run_free(agent, house, exog, stop_condition, hook)
+    
+    hook
+end
+
 @info "Implemented Environment Transition"

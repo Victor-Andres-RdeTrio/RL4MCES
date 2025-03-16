@@ -1,3 +1,6 @@
+# This file contains mostly ways of processing the objects produced during hyperparameter optimisation, 
+# which is performed with the function `threaded_hyperopt`, found in the file "policy_update\\policy.jl".
+
 """
     ParamStats
 

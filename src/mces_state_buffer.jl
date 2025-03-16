@@ -1,3 +1,39 @@
+"""
+   state_buffer_update!(ag::Agent, env::MCES_Env; training::Bool = true)
+
+Updates the state buffer with the current state of the environment and applies normalization.
+
+# Arguments
+- `ag::Agent`: The agent object that contains the policy with online statistics for normalization.
+- `env::MCES_Env`: The MCES environment containing the current state variables.
+- `training::Bool = true`: Flag indicating whether to update the running statistics during training.
+
+# Details
+1. Constructs a `curr_state` vector with the following environment variables:
+  - Electrical load (`env.load_e`)
+  - Thermal load (`env.load_th`)
+  - Photovoltaic generation (`env.pv`)
+  - Buy price (`env.λ_buy`)
+  - Sell price (`env.λ_sell`)
+  - EV availability factor (`env.ev.γ`)
+  - Grid power (`env.grid`)
+  - Battery power (`env.bess.p`)
+  - EV battery power (`env.ev.bat.p`)
+  - Heat pump electrical power (`env.hp.e`)
+  - Battery state of charge (`env.bess.soc`)
+  - EV battery state of charge (`env.ev.bat.soc`)
+  - Thermal energy storage state of charge (`env.tess.soc`)
+  - Normalized time step within the day (`mod1(env.t_ep, 96)/96`)
+
+2. If `training` is true, updates the running mean and standard deviation in the agent's policy for each of the state variables.
+3. Applies z-score normalization to the `curr_state` vector using the agent's online statistics.
+4. Pushes the normalized state to the environment's state buffer.
+
+# Note
+- The state vector is of type `Float32` for computational efficiency.
+- The state includes 14 variables representing the full state of the MCES environment.
+- The time step is normalized to a value between 0 and 1 representing the progress through the day.
+"""
 function state_buffer_update!(ag::Agent, env::MCES_Env; training::Bool = true)
     curr_state = Float32[
         env.load_e,
@@ -39,8 +75,8 @@ time steps within a day. The matrix is used to extract relevant values from a st
   is a vector of lags in days and day fractions.
 
 # Returns
-- `BitMatrix`: A Bit Matrix of size `(length(kwargs), daylength)`. Elements are set to true where state information 
-  should be selected, and false elsewhere.
+- `BitMatrix`: A BitMatrix of size `(max_row, daylength)` where max_row is the maximum row index provided.
+  Elements are set to true where state information should be selected, and false elsewhere.
 
 
 # Example
@@ -54,8 +90,11 @@ matrix = matrix_select_states(; state_buffer_dict...)
 This creates a matrix where row 1 is true at indices corresponding to lags of 0, 0.5, and 1 day,
 and row 2 is true at indices corresponding to lags of 0.25 and 0.75 days.
 
-# Note
+# Notes
 - The function uses `day_to_index` to convert day lags to column indices, output is always within [1, daylength].
+- Arguments with row indices outside the range 1:max_row or with empty day vectors are skipped.
+- Throws an ArgumentError if any keyword argument value isn't a Tuple{<:Integer, Vector{<:Real}}.
+- This function is crucial for defining the field `state_buffer_ind` within the environment cnstructor function `build_MCES`.
 - This function is designed to work with a state buffer indexing system where:
     - State information is stored in a buffer of size (n_state_variables, daylength).
 
@@ -91,7 +130,14 @@ function count_features(dict::Dict)
     sum(length(t[2]) for (_, t) in dict)
 end
 
+###############################################
+# These are the feature vector configurations used within the Master thesis project.
+"""
+    what_features(type::Integer)
 
+Returns a dictionary mapping feature variables to an index and an array of time lags (max 1 day of lag),
+selecting the configuration based on the provided type. Raises an error if the type is unrecognized.
+"""
 function what_features(type::Integer)
     if type == 1 # Only exog, SoCs and time. 
         d = Dict(

@@ -1,3 +1,25 @@
+"""
+    create_safety_model!(env::MCES_Env; sf = 1.05f0)
+
+Creates an optimization model for safety projection of control actions in an MCES environment.
+
+# Arguments
+- `env::MCES_Env`: The MCES environment containing all system components.
+- `sf::Float32 = 1.05f0`: Safety factor used to slightly tighten constraint bounds.
+
+# Details
+1. Creates a JuMP model using either Ipopt (for nonlinear models) or HiGHS (for MILP models).
+2. Defines variables for all controllable components including battery systems, heat pump, and grid.
+3. Sets up power balance constraints for both electrical and thermal domains.
+4. Includes slack variables to ensure feasibility even in extreme conditions.
+5. Sets the objective function to minimize deviation from the proposed actions while penalizing slack variable usage.
+
+# Notes
+- If `env.simple_projection == true`, the function returns immediately without creating a model.
+- The MILP formulation is problematic and has proven to be inefficient in practice. It is recommended to 
+  use the nonlinear ("NL") formulation instead. Use MILP with extreme caution and do not expect it to work reliably.
+- The function stores the created model in `env.safety_model`.
+"""
 function create_safety_model!(env::MCES_Env; sf = 1.05f0)
     # Select optimizer based on model type
     env.simple_projection == true && return nothing
@@ -158,12 +180,47 @@ function create_safety_model!(env::MCES_Env; sf = 1.05f0)
     return nothing
 end
 
+"""
+    batt_coefficients(batt::Battery)
+
+Calculates the coefficient values for battery power conversion in MILP formulations.
+
+# Arguments
+- `batt::Battery`: The battery object containing parameters.
+
+# Returns
+- A tuple `(pos_coeff, neg_coeff)` where:
+  - `pos_coeff`: Coefficient for converting current to power during discharging
+  - `neg_coeff`: Coefficient for converting current to power during charging.
+
+# Details
+- Coefficients account for voltage, number of parallel/series cells, efficiency, and unit conversion.
+- Used to set coefficients in the optimization model.
+"""
 @inline function batt_coefficients(batt::Battery)
     pos_coeff = batt.v * batt.Np * batt.Ns * batt.η_c / 1000
     neg_coeff = batt.v * batt.Np * batt.Ns / (batt.η_c * 1000)
     return pos_coeff, neg_coeff
 end
 
+"""
+    update_model!(env::MCES_Env)
+
+Updates the safety model parameters with current environment state values.
+
+# Arguments
+- `env::MCES_Env`: The MCES environment containing the safety model and current state values.
+
+# Details
+1. Sets parameter values for raw decisions from the controller (p_ev_raw, p_bess_raw, p_hp_e_raw).
+2. Updates environmental parameters (loads, generation, storage states).
+3. For MILP models, updates the battery coefficient values.
+4. For NL models, updates battery voltage parameters directly.
+
+# Notes
+- Returns immediately if `env.simple_projection == true`.
+- Throws an error for invalid model types.
+"""
 @inline function update_model!(env::MCES_Env)
     env.simple_projection == true && return nothing
     model = env.safety_model
@@ -201,6 +258,24 @@ end
     return nothing
 end
 
+"""
+    warm_start_model!(model::JuMP.Model, p_ev, p_bess, p_hp_e; model_type::String = "NL")
+
+Initializes the optimization model with starting values to improve convergence speed.
+
+# Arguments
+- `model::JuMP.Model`: The JuMP model to warm start.
+- `p_ev`: Power setpoint for the electric vehicle battery [kW].
+- `p_bess`: Power setpoint for the battery energy storage system [kW].
+- `p_hp_e`: Electric power setpoint for the heat pump [kW].
+- `model_type::String = "NL"`: Type of model ("NL" for nonlinear or "MILP").
+
+# Details
+1. Sets appropriate start values for decision variables based on the provided power setpoints.
+2. For MILP models, handles positive and negative power variables separately.
+3. Initializes slack variables to zero.
+
+"""
 @inline function warm_start_model!(model::JuMP.Model, p_ev, p_bess, p_hp_e; model_type::String = "NL")
     if model_type == "NL"
         set_start_value(model[:p_ev], p_ev)
@@ -217,23 +292,46 @@ end
     return nothing
 end
 
+"""
+    use_projection!(env::MCES_Env)
+
+Enables the advanced safety projection mechanism in the MCES environment.
+
+# Arguments
+- `env::MCES_Env`: The MCES environment to modify.
+
+# Details
+- Sets `env.simple_projection` to `false`, activating the JuMP model-based safety projection.
+- When enabled, control actions will be projected to the feasible region using optimization.
+"""
 function use_projection!(env::MCES_Env)
     env.simple_projection = false
 end
 
 
 """
-    valid_actions(env::MCES_Env, decision)
-    
-Projects the proposed actions into valid actions (power levels) for the current state of the environment.
+    valid_actions(dec, env::MCES_Env; simple = false)
+
+Projects the proposed actions into valid actions (power levels) for the current state of the environment without using an optimization-based projection. 
   
-# Args:
-    * `env`: The MCES environment object.
-    * `decision`: An array containing proposed power levels for EV, BESS, and Heat Pump (in that order).
+# Arguments
+- `dec`: An array containing proposed power levels for EV, BESS, and Heat Pump [kW].
+- `env::MCES_Env`: The MCES environment object.
+- `simple::Bool = false`: 
+  - If true, uses simple projection (just enforcing power constraints). 
+  - If false, applies a more complex projection following a predefined algorithm (less precise than optimization-based projection, but considerably more reliable than simple projection)
   
-# Returns:
-    A list of valid power levels for EV, BESS, and Heat Pump (electric).
-""" 
+# Returns
+- A tuple of constrained power levels `(p_ev_valid, p_bess_valid, p_hp_e_valid)` in kW.
+
+# Details
+- First applies simple power limits to each component based on their specifications.
+- 
+
+# Notes
+- This function works differently from `valid_actions!`, since it does not rely on optimization-based projections.
+- Warning: `simple::Bool = false` does not guarantee the satisfaction of all system constraints, use `valid_actions!` with `simple = false` for this purpose. 
+"""
 function valid_actions(dec, env::MCES_Env; simple = false)
 
     p_ev_valid = limit_battery_power(dec[1], env.ev.bat, env.Δt, simple)
@@ -243,6 +341,37 @@ function valid_actions(dec, env::MCES_Env; simple = false)
     (p_ev_valid, p_bess_valid, p_hp_e_valid) # All in kW
 end
 
+"""
+    valid_actions!(actions_buf, dec, env::MCES_Env; simple = false)
+
+Projects the proposed actions into valid actions (power levels) for the current state of the environment, using an optimization-based approach (when `simple = false`).
+
+# Arguments
+- `actions_buf`: Pre-allocated buffer to store the resulting valid actions.
+- `dec`: An array containing proposed power levels for EV, BESS, and Heat Pump [kW].
+- `env::MCES_Env`: The MCES environment object.
+- `simple::Bool = false`: If true, uses simple bound projection rather than optimization-based projection.
+  
+# Returns
+- The `actions_buf` updated with valid power levels for EV, BESS, and Heat Pump (electric).
+
+# Details
+1. If `simple=true`, applies simple power limits to each component based on their specifications.
+2. If `simple=false`, further refines the actions using the optimization model:
+   - Warm-starts the model with values constrained by a more complex projection (not reliant on optimization)
+   - Optimizes to find feasible actions that further refine the values to respect all constraints. 
+   - Ensures the optimization is solved and feasible.
+   - Updates the buffer with the optimal values from the model.
+
+# Notes
+- This function is the in-place and **more robust version** of `valid_actions`.
+- The optimization approach provides more precise projection that satisfies all system constraints.
+- If the solver fails to converge, a warning is issued and the function returns the best available solution.
+
+# Warning
+- If the optimization fails, a warning is issued indicating the solver termination status.
+- The MILP model type has shown convergence issues and proven unreliable, use with great caution.
+"""
 @inline function valid_actions!(actions_buf, dec, env::MCES_Env; simple = false)
     
     if simple
@@ -271,6 +400,25 @@ end
     return actions_buf
 end
 
+"""
+    get_safe_decisions!(actions_buf::Vector{Float32}, model::JuMP.Model; model_type::String = "NL")
+
+Extracts the optimized power setpoints from the JuMP model into the provided buffer.
+
+# Arguments
+- `actions_buf::Vector{Float32}`: Pre-allocated buffer to store the extracted power setpoints.
+- `model::JuMP.Model`: The solved JuMP model containing the optimized variables.
+- `model_type::String = "NL"`: Type of the model ("NL" for nonlinear or "MILP").
+
+# Details
+1. For NL models, directly extracts the power variables from the model.
+2. For MILP models, computes the net power from the positive and negative components.
+3. Places the extracted values in the provided buffer in the order: EV power, BESS power, HP electric power.
+
+# Warning
+- The MILP model type has proven problematic in practice and may not provide reliable results.
+- Throws an error for invalid model types.
+"""
 @inline function get_safe_decisions!(actions_buf::Vector{Float32}, model::JuMP.Model; model_type::String = "NL")
     if model_type == "NL"
         actions_buf[1] = JuMP.value(model[:p_ev])

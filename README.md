@@ -12,7 +12,7 @@ Thesis on TU Delft Repository: [**Reinforcement Learning for Multicarrier Energy
 
 **Published:** 10th of February, 2025
 
-The code is thoroughly documented to aid anyone interested in exploring it. In addition, there are various README files to provide clear overviews of the purpose and contents of the files making up this repository.  
+The code is thoroughly documented to aid anyone interested in exploring it. In addition, various README files provide clear overviews of the purpose and contents of the files making up this repository.  
 
 ### Key Components of the MCES Environment
 

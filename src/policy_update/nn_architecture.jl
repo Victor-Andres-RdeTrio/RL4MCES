@@ -307,4 +307,46 @@ function count_nn_params(widths::Union{Vector{Int}, AbstractRange}, type::Intege
     return parameters
 end
 
+function plot_multiple_architectures(widths::Union{Vector{Int}, AbstractRange}, types::Vector{Int})
+    # Dictionary mapping type numbers to architecture names
+    type_names = Dict(
+        1 => "Constant Width (CW)",
+        2 => "Mid CW",
+        3 => "Deep CW",
+        4 => "CW + Std",
+        5 => "Pyramid",
+        6 => "Deep Pyramid",
+        7 => "Bottleneck",
+        8 => "Residual",
+        9 => "Deep Residual",
+        10 => "Residual + Bottleneck",
+        11 => "3 CW Branches ",
+        12 => "3 Pyramid Branches "
+    )
+
+    p = plot(
+        xlabel="Input Width [-]",
+        ylabel="Number of Parameters",
+        legend= :outerright,
+        yaxis = :log10,
+        margin = 5mm,
+        dpi = 600
+    )
+
+
+    for type in types
+        parameters = count_nn_params(widths, type, ns = 30)
+        plot!(p, widths, parameters, 
+              label=get(type_names, type, "Type $type"),
+              linewidth=1.5,
+              linestyle = type < 7 ? :solid : :dot,
+              )
+    end
+    display(p)
+    # Uncomment the following line if you want to save the plot
+    # savefig(p,joinpath(@__DIR__, "widthvsparams.svg"))
+    
+    return p
+end
+
 @info "All NN architectures are available for the agent"
