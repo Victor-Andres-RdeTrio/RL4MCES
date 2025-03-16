@@ -144,3 +144,6 @@ The **RL-based EMS** presents a *computationally efficient, data-driven alternat
 A **literature review** of RL applications for residential EMS is also presented, alongside investigations into **advanced policy update algorithms**, **deep neural network architectures**, **temporal feature engineering**, and **reward shaping strategies**, to evaluate their impact on performance.  
 
 The **RL-based EMS** effectively manages both **electrical** and **thermal subsystems** while maintaining **safety** and minimising costs. Its computational efficiency and reduced modelling requirements position it as a practical solution for **small-scale MCES applications** such as residential or office buildings, where **MPC** may not be feasible.  
+
+---
+Thesis on TU Delft Repository: [**Reinforcement Learning for Multicarrier Energy Management: *A Computationally Efficient Solution for TU Delft's Green Village***](https://resolver.tudelft.nl/uuid:7a31e167-150f-4581-998d-1fbe913e5cc9)
