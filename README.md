@@ -14,6 +14,8 @@ Thesis on TU Delft Repository: [**Reinforcement Learning for Multicarrier Energy
 
 The code is thoroughly documented to aid anyone interested in exploring it. In addition, various README files provide clear overviews of the purpose and contents of the files making up this repository.  
 
+![Simplified representation of Actor training](diagrams/Actor_training_diagram.png)
+
 ### Key Components of the MCES Environment
 
 - 🔋 Lithium-ion battery storage
