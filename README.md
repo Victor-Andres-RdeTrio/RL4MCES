@@ -51,7 +51,7 @@ The project is implemented in **Julia**, leveraging the `ReinforcementLearning.j
 - Policy definitions
 - Runtime staging
 
-Due to ongoing package refactoring, the **VPG with Critic, A2CGAE and PPO** policy update algorithms were custom-implemented to maintain Julia's performance benefits.
+Due to ongoing package refactoring, the **VPG with Critic, A2CGAE and PPO** policy update algorithms were custom-implemented to maintain Julia's performance benefits. The version of the package used as a starting point was 0.10.2.
 
 The codebase makes use of Julia's performance benefits through:
 
